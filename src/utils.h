@@ -12,4 +12,7 @@ bool parse_double(double *dest, char *s, int length);
 
 char* copy_string(char *s);
 
+double deg2rad(double degrees);
+double rad2deg(double radians);
+
 #endif

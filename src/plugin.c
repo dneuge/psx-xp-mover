@@ -13,6 +13,8 @@
 static XPLMFlightLoopID flight_loop_after_flight_model_id = {0};
 static bool flight_loop_registered = false;
 
+#define MODEL_HEIGHT_OFFSET_METERS (3.25) /* NOTE: this is a rough guess from experimentation, not an exact measurement */
+
 typedef int xpint_t;
 typedef float xpfloat_t;
 typedef double xpdouble_t;
@@ -101,15 +103,15 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     double local_x = 0.0;
     double local_y = 0.0;
     double local_z = 0.0;
-    XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters, &local_x, &local_y, &local_z);
+    XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters + MODEL_HEIGHT_OFFSET_METERS, &local_x, &local_y, &local_z);
 
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.track_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
     XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
 
-    XPLMSetDatad(dataref_local_x, local_x);
-    XPLMSetDatad(dataref_local_y, local_y);
-    XPLMSetDatad(dataref_local_z, local_z);
+    XPLMSetDatad(dataref_local_x, local_x); // TODO: correct by model/flight deck offset (value is meters W-E)
+    XPLMSetDatad(dataref_local_y, local_y); // TODO: pin to ground when PSX indicates ground contact and speed is low (see XPLMScenery on probes)
+    XPLMSetDatad(dataref_local_z, local_z); // TODO: correct by model/flight deck offset (value is meters S-N)
 
     return CALL_ON_NEXT_FRAME;
 }

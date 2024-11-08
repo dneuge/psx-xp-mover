@@ -1,5 +1,6 @@
 #include "psx.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,12 +114,29 @@ bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line) {
 }
 
 bool psx_recalculate_boost_frame(psx_boost_frame_t *frame) {
-    double flight_deck_altitude_msl_feet = ((double)frame->flight_deck_altitude_msl_feet_hundreds) / 100.0;
-    frame->elevation_msl_meters = flight_deck_altitude_msl_feet * FACTOR_FEET_TO_METERS;
-
     frame->bank_degrees = -((float) frame->bank_degrees_hundreds) / 100.0f;
     frame->pitch_degrees = ((float) frame->pitch_degrees_hundreds) / 100.0f;
     frame->track_degrees = ((float) frame->track_degrees_hundreds) / 100.0f;
+
+    // Details on how flight deck altitude is calculated/reversed: (equation used below)
+    // https://aerowinx.com/board/index.php/topic,4471.msg47237.html#msg47237
+    //
+    // More detail on where the reference point is located:
+    // between pilots (i.e. above middle of center pedestal), standard seat position, average height
+    // https://aerowinx.com/board/index.php/topic,6867.msg74031.html
+    //
+    // Note that this *may* put the aircraft closer to (or even into) ground but it still is far from providing
+    // an accurate position. Also note that pitch depends on ground elevation feedback. While we don't provide that
+    // from this plugin, supplementary tooling may want to. However, we would need to recalculate pitch, then:
+    // https://aerowinx.com/board/index.php/topic,5023.msg53571.html#msg53571
+    // The reference point being different also means lat/lon is still somewhat misplaced. This is probably not an exact
+    // science as it depends on where, for each use case, the reference point is needed. For visually moving a model in
+    // place this is best corrected after turning lat/lon into cartesian local_* coordinates in X-Plane.
+    // Keep in mind that this is not meant to be a proper "scenery generator".
+    // If we can get reasonably good values: Great! But if we can't: It's not our focus (at least not yet).
+    double flight_deck_altitude_msl_feet = ((double)frame->flight_deck_altitude_msl_feet_hundreds) / 100.0;
+    double airframe_center_altitude_feet = flight_deck_altitude_msl_feet - (28.412073 + (92.5 * sin(deg2rad((double) frame->pitch_degrees))));
+    frame->elevation_msl_meters = airframe_center_altitude_feet * FACTOR_FEET_TO_METERS;
 
     return true;
 }

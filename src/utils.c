@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -98,4 +99,15 @@ char* copy_string(char *s) {
     copy[length] = 0;
 
     return copy;
+}
+
+#define FACTOR_DEGREES_PER_RADIAN (180.0 / M_PI)
+#define FACTOR_RADIANS_PER_DEGREE (M_PI / 180.0)
+
+inline double deg2rad(double degrees) {
+    return degrees * FACTOR_RADIANS_PER_DEGREE;
+}
+
+inline double rad2deg(double radians) {
+    return radians * FACTOR_DEGREES_PER_RADIAN;
 }
