@@ -1,0 +1,12 @@
+.idea
+cmake-build-debug
+*.iml
+
+build
+lib
+release
+
+user.cfg
+
+*.nocommit
+*.nocommit.*
