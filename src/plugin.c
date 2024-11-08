@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,13 +8,20 @@
 #include <XPLMProcessing.h>
 
 #include "psx.h"
+#include "utils.h"
 
 #define CALL_ON_NEXT_FRAME (-1.0f)
 
 static XPLMFlightLoopID flight_loop_after_flight_model_id = {0};
 static bool flight_loop_registered = false;
 
-#define MODEL_HEIGHT_OFFSET_METERS (3.25) /* NOTE: this is a rough guess from experimentation, not an exact measurement */
+// NOTE: offset corrections are more a rough guess from experimentation than exact measurements
+// TODO: make correction factors changeable at runtime through datarefs, experiment to improve further
+#define MODEL_HEIGHT_OFFSET_METERS (3.25)   /* visually: roughly the height from ground to lower 1/3 of outer engines */
+#define MODEL_LENGTH_OFFSET_METERS (28.194) /* observable by changing HDG in PSX on a parking position, aircraft rotates
+                                             at tail; visually: a bit less than half the fuselage offset from main gear;
+                                             mainly caused by offset of PSX flight deck from gear but not exactly the
+                                             documented length */
 
 typedef int xpint_t;
 typedef float xpfloat_t;
@@ -105,13 +113,18 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     double local_z = 0.0;
     XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters + MODEL_HEIGHT_OFFSET_METERS, &local_x, &local_y, &local_z);
 
+    // center of rotation is offset between PSX and XP model
+    // local OpenGL coordinates luckily are defined in meters, so we can correct the position by simple trigonometry
+    local_x -= sin(deg2rad(boost_frame_copy.track_degrees)) * MODEL_LENGTH_OFFSET_METERS; // neg west / pos east
+    local_z += cos(deg2rad(boost_frame_copy.track_degrees)) * MODEL_LENGTH_OFFSET_METERS; // neg north / pos south
+
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.track_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
     XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
 
-    XPLMSetDatad(dataref_local_x, local_x); // TODO: correct by model/flight deck offset (value is meters W-E)
+    XPLMSetDatad(dataref_local_x, local_x);
     XPLMSetDatad(dataref_local_y, local_y); // TODO: pin to ground when PSX indicates ground contact and speed is low (see XPLMScenery on probes)
-    XPLMSetDatad(dataref_local_z, local_z); // TODO: correct by model/flight deck offset (value is meters S-N)
+    XPLMSetDatad(dataref_local_z, local_z);
 
     return CALL_ON_NEXT_FRAME;
 }
