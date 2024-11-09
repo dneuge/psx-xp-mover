@@ -114,6 +114,21 @@ static void announce_dataref(const char *dataref_name) {
 }
 
 static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatad_f inReadDouble, void *inReadRefcon, XPLMSetDatad_f inWriteDouble, void *inWriteRefcon) {
+    if (!inDataName) {
+        printf("[XPMover] tried to register nameless dataref\n");
+        return false;
+    }
+
+    if (!dest) {
+        printf("[XPMover] tried to register dataref %s without destination\n", inDataName);
+        return false;
+    }
+
+    if (!inReadDouble || !inWriteDouble) {
+        printf("[XPMover] tried to register dataref %s without functions\n", inDataName);
+        return false;
+    }
+
     *dest = XPLMRegisterDataAccessor(
         inDataName, xplmType_Double, DATAREF_WRITABLE,
         NULL, NULL,
@@ -140,10 +155,29 @@ static void set_double(void *inRefcon, double value) {
 }
 
 static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
+    if (!value_ref) {
+        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        return false;
+    }
     return register_double_dataref(dest, dataref_name, get_double, value_ref, set_double, value_ref);
 }
 
 static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatai_f inReadInt, void *inReadRefcon, XPLMSetDatai_f inWriteInt, void *inWriteRefcon) {
+    if (!inDataName) {
+        printf("[XPMover] tried to register nameless dataref\n");
+        return false;
+    }
+
+    if (!dest) {
+        printf("[XPMover] tried to register dataref %s without destination\n", inDataName);
+        return false;
+    }
+
+    if (!inReadInt || !inWriteInt) {
+        printf("[XPMover] tried to register dataref %s without functions\n", inDataName);
+        return false;
+    }
+
     *dest = XPLMRegisterDataAccessor(
         inDataName, xplmType_Int, DATAREF_WRITABLE,
         inReadInt, inWriteInt,
@@ -170,6 +204,10 @@ static void set_int(void *inRefcon, int value) {
 }
 
 static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
+    if (!value_ref) {
+        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        return false;
+    }
     return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
 }
 
