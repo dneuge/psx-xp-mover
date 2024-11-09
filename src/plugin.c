@@ -63,7 +63,12 @@ static bool find_dataref(XPLMDataRef *dest, char *name) {
 
 static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon)
 {
+    // https://developer.x-plane.com/article/movingtheplane/
+
     psx_boost_frame_t boost_frame_copy = {0};
+
+    // TODO: do only once every x frames
+    XPLMSetDatavi(dataref_override_planepath, disable_planepath, 0, 1);
 
     if (!datarefs_initialized) {
         bool success = true;
@@ -100,11 +105,6 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     if (!is_new) {
         return CALL_ON_NEXT_FRAME;
     }
-
-    // https://developer.x-plane.com/article/movingtheplane/
-
-    // TODO: do only once every x frames
-    XPLMSetDatavi(dataref_override_planepath, disable_planepath, 0, 1);
 
     // TODO: check difference to previous location, if large call XPLMPlaceUserAtLocation before local positioning?
 
