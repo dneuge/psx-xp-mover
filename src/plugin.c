@@ -7,6 +7,7 @@
 #include <XPLMGraphics.h>
 #include <XPLMProcessing.h>
 #include <XPLMPlugin.h>
+#include <XPLMScenery.h>
 
 #include "psx.h"
 #include "utils.h"
@@ -53,6 +54,12 @@ static XPLMDataRef dataref_local_x = NULL;
 static XPLMDataRef dataref_local_y = NULL;
 static XPLMDataRef dataref_local_z = NULL;
 static bool datarefs_initialized = false;
+
+static XPLMProbeRef probe = NULL;
+static XPLMProbeInfo_t *probe_info = NULL;
+static double terrain_elevation_meters = NAN;
+static int terrain_elevation_remaining_cycles = 0;
+#define TERRAIN_ELEVATION_MAX_AGE_CYCLES (30 /* seconds */ * 60 /* FPS */)
 
 static xpint_t disable_planepath[] = {1};
 
@@ -214,6 +221,23 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         cycles_to_override_plane_path--;
     }
 
+    // eventually expire terrain elevation
+    // Terrain elevation is being queried by probing general scenery which is mentioned as being an expensive operation
+    // so we only update it while on or close to ground. It may also happen that some probes hit dynamically moving
+    // objects instead of actual terrain in which case we want to ignore the result. When flying between airports we
+    // might have a very different terrain elevation on approach/touch-down (needing terrain elevation) as compared to
+    // liftoff/departure (last update). This means we should revoke the previous elevation data eventually.
+    // However, we cannot do it the moment we leave ground as the aircraft may bounce on takeoff or landing and we want
+    // to still have consistent valid data in that case. So instead of setting it to NAN right away we only clear it
+    // after some expiration time.
+    if (terrain_elevation_remaining_cycles == 0) {
+        terrain_elevation_meters = NAN;
+    }
+
+    if (terrain_elevation_remaining_cycles >= 0) {
+        terrain_elevation_remaining_cycles--;
+    }
+
     bool has_debug_override = (debug_spin_hdg != 0.0);
 
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
@@ -257,12 +281,42 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     local_x -= sin(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
     local_z += cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
 
+    if (!boost_frame_copy.ground_contact) {
+        // revoke terrain elevation; must be recalculated at least once the next time we touch ground
+        terrain_elevation_meters = NAN;
+    } else {
+        // probe terrain at current position
+        XPLMProbeResult probe_result = XPLMProbeTerrainXYZ(probe, (float) local_x, (float) local_y, (float) local_z, probe_info);
+        if (probe_result == xplm_ProbeHitTerrain) {
+            // if the probed object moves it cannot be terrain but is probably some scenery object, ignore it
+            if (probe_info->velocityX == 0.0 && probe_info->velocityY == 0.0 && probe_info->velocityZ == 0.0) {
+                double probe_latitude = 0.0;
+                double probe_longitude = 0.0;
+                XPLMLocalToWorld(
+                    probe_info->locationX, probe_info->locationY, probe_info->locationZ,
+                    &probe_latitude, &probe_longitude, &terrain_elevation_meters
+                );
+
+                // reset expiration countdown
+                terrain_elevation_remaining_cycles = TERRAIN_ELEVATION_MAX_AGE_CYCLES;
+            }
+        }
+
+        if (!isnan(terrain_elevation_meters)) {
+            // pin to ground
+            // TODO: transition between PSX altitude and XP terrain elevation, e.g. based on speed
+            double _ignore_local_x = 0.0;
+            double _ignore_local_y = 0.0;
+            XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, terrain_elevation_meters + model_height_offset_meters, &_ignore_local_x, &_ignore_local_y, &local_z);
+        }
+    }
+
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
     XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
 
     XPLMSetDatad(dataref_local_x, local_x);
-    XPLMSetDatad(dataref_local_y, local_y); // TODO: pin to ground when PSX indicates ground contact and speed is low (see XPLMScenery on probes)
+    XPLMSetDatad(dataref_local_y, local_y);
     XPLMSetDatad(dataref_local_z, local_z);
 
     return CALL_ON_NEXT_FRAME;
@@ -288,7 +342,7 @@ PLUGIN_API int XPluginEnable() {
         .refcon = NULL,
     };
 
-    if (datarefs_initialized || psx_client) {
+    if (datarefs_initialized || psx_client || probe || probe_info) {
         printf("[XPMover] internal variables are already set, another instance appears to still be running; aborting startup\n");
         return 0;
     }
@@ -296,6 +350,19 @@ PLUGIN_API int XPluginEnable() {
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
         printf("[XPMover] failed to create PSX client; aborting startup\n");
+        goto rollback;
+    }
+
+    probe_info = zmalloc(sizeof(XPLMProbeInfo_t));
+    if (!probe_info) {
+        printf("[XPMover] failed to allocate probe info; aborting startup\n");
+        goto rollback;
+    }
+    probe_info->structSize = sizeof(XPLMProbeInfo_t);
+
+    probe = XPLMCreateProbe(xplm_ProbeY);
+    if (!probe) {
+        printf("[XPMover] failed to create probe; aborting startup\n");
         goto rollback;
     }
 
@@ -333,6 +400,11 @@ PLUGIN_API void XPluginDisable() {
 
     unregister_dataref(&dataref_model_height_offset);
     unregister_dataref(&dataref_model_length_offset);
+
+    if (probe) {
+        XPLMDestroyProbe(probe);
+        probe = NULL;
+    }
 }
 
 PLUGIN_API void XPluginStop() {
