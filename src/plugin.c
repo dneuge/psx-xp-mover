@@ -93,30 +93,6 @@ static bool find_dataref(XPLMDataRef *dest, char *name) {
     return (*dest) != NULL;
 }
 
-static double get_model_offset_height(void *inRefcon) {
-    return model_height_offset_meters;
-}
-
-static void set_model_offset_height(void *inRefcon, double inValue) {
-    model_height_offset_meters = inValue;
-}
-
-static double get_model_offset_length(void *inRefcon) {
-    return model_length_offset_meters;
-}
-
-static void set_model_offset_length(void *inRefcon, double inValue) {
-    model_length_offset_meters = inValue;
-}
-
-static double get_debug_spin_hdg(void *inRefcon) {
-    return debug_spin_hdg;
-}
-
-static void set_debug_spin_hdg(void *inRefcon, double inValue) {
-    debug_spin_hdg = inValue;
-}
-
 static void announce_dataref(const char *dataref_name) {
     if (dataref_editor_plugin_id == XPLM_NO_PLUGIN_ID) {
         dataref_editor_plugin_id = XPLMFindPluginBySignature(DATAREF_EDITOR_PLUGIN_NAME);
@@ -130,7 +106,7 @@ static void announce_dataref(const char *dataref_name) {
     XPLMSendMessageToPlugin(dataref_editor_plugin_id, DATAREF_EDITOR_MSG_ADD_DATAREF, (void*) dataref_name);
 }
 
-static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatad_f inReadDouble, XPLMSetDatad_f inWriteDouble) {
+static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatad_f inReadDouble, void *inReadRefcon, XPLMSetDatad_f inWriteDouble, void *inWriteRefcon) {
     *dest = XPLMRegisterDataAccessor(
         inDataName, xplmType_Double, DATAREF_WRITABLE,
         NULL, NULL,
@@ -139,13 +115,25 @@ static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, X
         NULL, NULL,
         NULL, NULL,
         NULL, NULL,
-        NULL,
-        NULL
+        inReadRefcon,
+        inWriteRefcon
     );
 
     announce_dataref(inDataName);
 
     return (*dest != NULL);
+}
+
+static double get_double(double *value_ref) {
+    return *value_ref;
+}
+
+static void set_double(double *value_ref, double value) {
+    *value_ref = value;
+}
+
+static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
+    return register_double_dataref(dest, dataref_name, get_double, value_ref, set_double, value_ref);
 }
 
 static void unregister_dataref(XPLMDataRef *dataref) {
@@ -184,24 +172,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         }
 
         // now register datarefs we want to provide
-        success &= register_double_dataref(
-            &dataref_model_height_offset,
-            dataref_name_model_height_offset,
-            get_model_offset_height,
-            set_model_offset_height
-        );
-        success &= register_double_dataref(
-            &dataref_model_length_offset,
-            dataref_name_model_length_offset,
-            get_model_offset_length,
-            set_model_offset_length
-        );
-        success &= register_double_dataref(
-            &dataref_debug_spin_hdg,
-            dataref_name_debug_spin_hdg,
-            get_debug_spin_hdg,
-            set_debug_spin_hdg
-        );
+        success &= expose_double_as_dataref(&dataref_model_height_offset, dataref_name_model_height_offset, &model_height_offset_meters);
+        success &= expose_double_as_dataref(&dataref_model_length_offset, dataref_name_model_length_offset, &model_length_offset_meters);
+        success &= expose_double_as_dataref(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
