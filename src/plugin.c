@@ -16,12 +16,20 @@ static XPLMFlightLoopID flight_loop_after_flight_model_id = {0};
 static bool flight_loop_registered = false;
 
 // NOTE: offset corrections are more a rough guess from experimentation than exact measurements
-// TODO: make correction factors changeable at runtime through datarefs, experiment to improve further
-#define MODEL_HEIGHT_OFFSET_METERS (3.25)   /* visually: roughly the height from ground to lower 1/3 of outer engines */
-#define MODEL_LENGTH_OFFSET_METERS (28.194) /* observable by changing HDG in PSX on a parking position, aircraft rotates
-                                             at tail; visually: a bit less than half the fuselage offset from main gear;
-                                             mainly caused by offset of PSX flight deck from gear but not exactly the
-                                             documented length */
+static double model_length_offset_meters = 28.194; // visually: roughly the height from ground to lower 1/3 of outer engines
+static double model_height_offset_meters = 3.25;   /* observable by changing HDG in PSX on a parking position, aircraft rotates
+                                                      at tail; visually: a bit less than half the fuselage offset from main gear;
+                                                      mainly caused by offset of PSX flight deck from gear but not exactly the
+                                                      documented length */
+static double debug_spin_hdg = 0.0;
+
+const char dataref_name_model_length_offset[] = "xpmover/model_offset/length";
+static XPLMDataRef dataref_model_length_offset = NULL;
+
+const char dataref_name_model_height_offset[] = "xpmover/model_offset/height";
+static XPLMDataRef dataref_model_height_offset = NULL;
+
+#define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
 typedef float xpfloat_t;
@@ -44,6 +52,10 @@ static psx_boost_frame_t boost_frame = {0};
 static bool boost_frame_applied = false;
 static mtx_t boost_frame_mutex;
 
+#define DATAREF_EDITOR_PLUGIN_NAME "xplanesdk.examples.DataRefEditor"
+#define DATAREF_EDITOR_MSG_ADD_DATAREF (0x01000000)
+static XPLMPluginID dataref_editor_plugin_id = XPLM_NO_PLUGIN_ID;
+
 static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
         printf("[XPMover] receive callback failed to lock boost frame mutex");
@@ -61,6 +73,62 @@ static bool find_dataref(XPLMDataRef *dest, char *name) {
     return (*dest) != NULL;
 }
 
+static double get_model_offset_height(void *inRefcon) {
+    return model_height_offset_meters;
+}
+
+static void set_model_offset_height(void *inRefcon, double inValue) {
+    model_height_offset_meters = inValue;
+}
+
+static double get_model_offset_length(void *inRefcon) {
+    return model_length_offset_meters;
+}
+
+static void set_model_offset_length(void *inRefcon, double inValue) {
+    model_length_offset_meters = inValue;
+}
+
+static void announce_dataref(const char *dataref_name) {
+    if (dataref_editor_plugin_id == XPLM_NO_PLUGIN_ID) {
+        dataref_editor_plugin_id = XPLMFindPluginBySignature(DATAREF_EDITOR_PLUGIN_NAME);
+    }
+
+    if (dataref_editor_plugin_id == XPLM_NO_PLUGIN_ID) {
+        printf("[XPMover] DataRefEditor does not appear to be installed, unable to announce dataref\n");
+        return;
+    }
+
+    XPLMSendMessageToPlugin(dataref_editor_plugin_id, DATAREF_EDITOR_MSG_ADD_DATAREF, (void*) dataref_name);
+}
+
+static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatad_f inReadDouble, XPLMSetDatad_f inWriteDouble) {
+    *dest = XPLMRegisterDataAccessor(
+        inDataName, xplmType_Double, DATAREF_WRITABLE,
+        NULL, NULL,
+        NULL, NULL,
+        inReadDouble, inWriteDouble,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL,
+        NULL
+    );
+
+    announce_dataref(inDataName);
+
+    return (*dest != NULL);
+}
+
+static void unregister_dataref(XPLMDataRef *dataref) {
+    if (!dataref) {
+        return;
+    }
+
+    XPLMUnregisterDataAccessor(*dataref);
+    *dataref = NULL;
+}
+
 static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon)
 {
     // https://developer.x-plane.com/article/movingtheplane/
@@ -72,6 +140,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     if (!datarefs_initialized) {
         bool success = true;
+
+        // first find all datarefs we need from X-Plane, we will not be able to run if we don't have those
         success &= find_dataref(&dataref_override_planepath, "sim/operation/override/override_planepath");
         success &= find_dataref(&dataref_psi_hdg, "sim/flightmodel/position/psi");
         success &= find_dataref(&dataref_phi_roll, "sim/flightmodel/position/phi");
@@ -86,6 +156,24 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             // TODO: disable plugin, it's unlikely that we could recover later
             printf("[XPMover] unable to find datarefs\n");
             return 0;
+        }
+
+        // now register datarefs we want to provide
+        success &= register_double_dataref(
+            &dataref_model_height_offset,
+            dataref_name_model_height_offset,
+            get_model_offset_height,
+            set_model_offset_height
+        );
+        success &= register_double_dataref(
+            &dataref_model_length_offset,
+            dataref_name_model_length_offset,
+            get_model_offset_length,
+            set_model_offset_length
+        );
+        if (!success) {
+            // our own datarefs only enable external control but they are not essential to continue
+            printf("[XPMover] failed to register datarefs\n");
         }
     }
 
@@ -111,12 +199,12 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     double local_x = 0.0;
     double local_y = 0.0;
     double local_z = 0.0;
-    XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters + MODEL_HEIGHT_OFFSET_METERS, &local_x, &local_y, &local_z);
+    XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters + model_height_offset_meters, &local_x, &local_y, &local_z);
 
     // center of rotation is offset between PSX and XP model
     // local OpenGL coordinates luckily are defined in meters, so we can correct the position by simple trigonometry
-    local_x -= sin(deg2rad(boost_frame_copy.track_degrees)) * MODEL_LENGTH_OFFSET_METERS; // neg west / pos east
-    local_z += cos(deg2rad(boost_frame_copy.track_degrees)) * MODEL_LENGTH_OFFSET_METERS; // neg north / pos south
+    local_x -= sin(deg2rad(boost_frame_copy.track_degrees)) * model_length_offset_meters; // neg west / pos east
+    local_z += cos(deg2rad(boost_frame_copy.track_degrees)) * model_length_offset_meters; // neg north / pos south
 
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.track_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
@@ -185,6 +273,9 @@ PLUGIN_API void XPluginDisable() {
             printf("[XPMover] PSX client could not be destroyed, failed to terminate properly\n");
         }
     }
+
+    unregister_dataref(&dataref_model_height_offset);
+    unregister_dataref(&dataref_model_length_offset);
 }
 
 PLUGIN_API void XPluginStop() {
