@@ -25,7 +25,7 @@ static double model_length_offset_meters = 28.194; // visually: roughly the heig
                                                    // 28.194m is the documented offset from "flight deck" to aircraft center,
                                                    // note that the PSX boost server will send lat/lon for the "flight deck"
                                                    // view point, not the aircraft center
-static double model_height_offset_meters = 3.25;   /* observable by changing HDG in PSX on a parking position, aircraft rotates
+static double model_height_offset_meters = 3.8;    /* observable by changing HDG in PSX on a parking position, aircraft rotates
                                                       at tail; visually: a bit less than half the fuselage offset from main gear;
                                                       mainly caused by offset of PSX flight deck from gear but not exactly the
                                                       documented length */
