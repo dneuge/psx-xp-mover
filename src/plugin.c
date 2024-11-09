@@ -131,12 +131,12 @@ static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, X
     return (*dest != NULL);
 }
 
-static double get_double(double *value_ref) {
-    return *value_ref;
+static double get_double(void *inRefcon) {
+    return *((double*)inRefcon);
 }
 
-static void set_double(double *value_ref, double value) {
-    *value_ref = value;
+static void set_double(void *inRefcon, double value) {
+    *((double*)inRefcon) = value;
 }
 
 static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
@@ -161,12 +161,12 @@ static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLM
     return (*dest != NULL);
 }
 
-static int get_int(int *value_ref) {
-    return *value_ref;
+static int get_int(void *inRefcon) {
+    return *((int*)inRefcon);
 }
 
-static void set_int(int *value_ref, int value) {
-    *value_ref = value;
+static void set_int(void *inRefcon, int value) {
+    *((int*)inRefcon) = value;
 }
 
 static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
