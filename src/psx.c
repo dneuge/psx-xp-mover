@@ -34,10 +34,10 @@ void psx_print_boost_frame(psx_boost_frame_t *frame) {
     }
 
     printf(
-        "[XPMover] [Boost] fd_lat=%.14lf, fd_lon=%.15lf, elev_m=%.1lf (%ld), track=%.1f (%d), pitch=%.1f (%d), bank=%.1f (%d), g=%d, ts=%u\n",
+        "[XPMover] [Boost] fd_lat=%.14lf, fd_lon=%.15lf, elev_m=%.1lf (%ld), hdg=%.1f (%d), pitch=%.1f (%d), bank=%.1f (%d), g=%d, ts=%u\n",
         frame->flight_deck_latitude, frame->flight_deck_longitude,
         frame->elevation_msl_meters, frame->flight_deck_altitude_msl_feet_hundreds,
-        frame->track_degrees, frame->track_degrees_hundreds,
+        frame->heading_true_degrees, frame->heading_true_degrees_hundreds,
         frame->pitch_degrees, frame->pitch_degrees_hundreds,
         frame->bank_degrees, frame->bank_degrees_hundreds,
         frame->ground_contact,
@@ -84,7 +84,7 @@ bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line) {
             switch (field) {
                 case 0: success = parse_ground_flag(&frame->ground_contact, field_start, length); break;
                 case 1: success = parse_long(&frame->flight_deck_altitude_msl_feet_hundreds, field_start, length); break;
-                case 2: success = parse_int(&frame->track_degrees_hundreds, field_start, length); break;
+                case 2: success = parse_int(&frame->heading_true_degrees_hundreds, field_start, length); break;
                 case 3: success = parse_int(&frame->pitch_degrees_hundreds, field_start, length); break;
                 case 4: success = parse_int(&frame->bank_degrees_hundreds, field_start, length); break;
                 case 5: success = parse_double(&frame->flight_deck_latitude, field_start, length); break;
@@ -116,7 +116,7 @@ bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line) {
 bool psx_recalculate_boost_frame(psx_boost_frame_t *frame) {
     frame->bank_degrees = -((float) frame->bank_degrees_hundreds) / 100.0f;
     frame->pitch_degrees = ((float) frame->pitch_degrees_hundreds) / 100.0f;
-    frame->track_degrees = ((float) frame->track_degrees_hundreds) / 100.0f;
+    frame->heading_true_degrees = ((float) frame->heading_true_degrees_hundreds) / 100.0f;
 
     // Details on how flight deck altitude is calculated/reversed: (equation used below)
     // https://aerowinx.com/board/index.php/topic,4471.msg47237.html#msg47237

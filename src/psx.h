@@ -10,7 +10,7 @@ typedef struct {
     // received over network
     bool ground_contact;
     long flight_deck_altitude_msl_feet_hundreds;
-    int track_degrees_hundreds;
+    int heading_true_degrees_hundreds;
     int pitch_degrees_hundreds; // positive = nose up, negative = nose down
     int bank_degrees_hundreds; // positive = right, negative = left
     double flight_deck_latitude; // positive = north, negative = south
@@ -19,7 +19,7 @@ typedef struct {
 
     // calculated locally
     double elevation_msl_meters;
-    float track_degrees;
+    float heading_true_degrees;
     float pitch_degrees;
     float bank_degrees;
 } psx_boost_frame_t;

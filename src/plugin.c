@@ -221,7 +221,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         // This is useful when trying to find the model length offset: Set the dataref to spin the aircraft, then adjust
         // the offset dataref until it looks fine.
         if (debug_spin_hdg != 0.0) {
-            boost_frame_copy.track_degrees_hundreds = (int) roundl((fmod(runtime_seconds, debug_spin_hdg) / debug_spin_hdg) * 360.0 * 100.0);
+            boost_frame_copy.heading_true_degrees_hundreds = (int) roundl((fmod(runtime_seconds, debug_spin_hdg) / debug_spin_hdg) * 360.0 * 100.0);
         }
         psx_recalculate_boost_frame(&boost_frame_copy);
     }
@@ -235,10 +235,10 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     // center of rotation is offset between PSX and XP model
     // local OpenGL coordinates luckily are defined in meters, so we can correct the position by simple trigonometry
-    local_x -= sin(deg2rad(boost_frame_copy.track_degrees)) * model_length_offset_meters; // neg west / pos east
-    local_z += cos(deg2rad(boost_frame_copy.track_degrees)) * model_length_offset_meters; // neg north / pos south
+    local_x -= sin(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
+    local_z += cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
 
-    XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.track_degrees);
+    XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
     XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
 
