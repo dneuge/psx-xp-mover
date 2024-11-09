@@ -400,6 +400,7 @@ PLUGIN_API void XPluginDisable() {
 
     unregister_dataref(&dataref_model_height_offset);
     unregister_dataref(&dataref_model_length_offset);
+    unregister_dataref(&dataref_debug_spin_hdg);
 
     if (probe) {
         XPLMDestroyProbe(probe);
