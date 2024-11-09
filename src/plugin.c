@@ -56,6 +56,9 @@ static psx_boost_frame_t boost_frame = {0};
 static bool boost_frame_applied = false;
 static mtx_t boost_frame_mutex;
 
+#define INIT_CYCLES_TO_OVERRIDE_PLANE_PATH (10);
+static int cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
+
 #define DATAREF_EDITOR_PLUGIN_NAME "xplanesdk.examples.DataRefEditor"
 #define DATAREF_EDITOR_MSG_ADD_DATAREF (0x01000000)
 static XPLMPluginID dataref_editor_plugin_id = XPLM_NO_PLUGIN_ID;
@@ -147,9 +150,6 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     psx_boost_frame_t boost_frame_copy = {0};
 
-    // TODO: do only once every x frames
-    XPLMSetDatavi(dataref_override_planepath, disable_planepath, 0, 1);
-
     if (!datarefs_initialized) {
         bool success = true;
 
@@ -195,6 +195,19 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         }
     }
 
+    // disable flight model application; only needs to be done once per plugin initialization
+    // We delay that to allow XP to potentially set internal variables once before we take over. This was done in an
+    // attempt to prevent false detection of hypoxia (cockpit view instantly fades to black even when on a fixed ground
+    // position, even at sea level) although that's apparently not enough to fix it.
+    if (cycles_to_override_plane_path == 0) {
+        printf("[XPMover] overriding planepath\n");
+        XPLMSetDatavi(dataref_override_planepath, disable_planepath, 0, 1);
+    }
+
+    if (cycles_to_override_plane_path >= 0) {
+        cycles_to_override_plane_path--;
+    }
+
     bool has_debug_override = (debug_spin_hdg != 0.0);
 
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
@@ -226,7 +239,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         psx_recalculate_boost_frame(&boost_frame_copy);
     }
 
-    // TODO: check difference to previous location, if large call XPLMPlaceUserAtLocation before local positioning?
+    // TODO: check difference to previous location, if large call XPLMPlaceUserAtLocation before local positioning? (may be needed to prevent wrong hypoxia on load)
 
     double local_x = 0.0;
     double local_y = 0.0;
@@ -279,6 +292,8 @@ PLUGIN_API int XPluginEnable() {
         printf("[XPMover] failed to create PSX client; aborting startup\n");
         return 0;
     }
+
+    cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
 
     flight_loop_after_flight_model_id = XPLMCreateFlightLoop(&params);
 
