@@ -21,14 +21,14 @@ static XPLMFlightLoopID flight_loop_after_flight_model_id = {0};
 static bool flight_loop_registered = false;
 
 // NOTE: offset corrections are more a rough guess from experimentation than exact measurements
-static double model_length_offset_meters = 28.194; // visually: roughly the height from ground to lower 1/3 of outer engines
-                                                   // 28.194m is the documented offset from "flight deck" to aircraft center,
-                                                   // note that the PSX boost server will send lat/lon for the "flight deck"
-                                                   // view point, not the aircraft center
-static double model_height_offset_meters = 3.8;    /* observable by changing HDG in PSX on a parking position, aircraft rotates
+static double model_height_offset_meters = 3.8;    // visually: roughly the height from ground to lower 1/3 of outer engines; adjust with ground pinning
+static double model_length_offset_meters = 28.194; /* observable by changing HDG in PSX on a parking position, aircraft rotates
                                                       at tail; visually: a bit less than half the fuselage offset from main gear;
                                                       mainly caused by offset of PSX flight deck from gear but not exactly the
-                                                      documented length */
+                                                      documented length
+                                                      28.194m is the documented offset from "flight deck" to aircraft center,
+                                                      note that the PSX boost server will send lat/lon for the "flight deck"
+                                                      view point, not the aircraft center, so debug_spin_hdg is misleading */
 static double debug_spin_hdg = 0.0;
 
 const char dataref_name_model_length_offset[] = "xpmover/model_offset/length";
