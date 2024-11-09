@@ -353,11 +353,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         }
 
         if (!isnan(terrain_elevation_meters)) {
-            // pin to ground
+            // pin to ground; only update local_y
             // TODO: transition between PSX altitude and XP terrain elevation, e.g. based on speed
             double _ignore_local_x = 0.0;
-            double _ignore_local_y = 0.0;
-            XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, terrain_elevation_meters + model_height_offset_meters, &_ignore_local_x, &_ignore_local_y, &local_z);
+            double _ignore_local_z = 0.0;
+            XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, terrain_elevation_meters + model_height_offset_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
         }
     }
 
