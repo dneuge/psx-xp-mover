@@ -6,6 +6,7 @@
 #include <XPLMDataAccess.h>
 #include <XPLMGraphics.h>
 #include <XPLMProcessing.h>
+#include <XPLMPlugin.h>
 
 #include "psx.h"
 #include "utils.h"
@@ -28,6 +29,9 @@ static XPLMDataRef dataref_model_length_offset = NULL;
 
 const char dataref_name_model_height_offset[] = "xpmover/model_offset/height";
 static XPLMDataRef dataref_model_height_offset = NULL;
+
+const char dataref_name_debug_spin_hdg[] = "xpmover/debug/spin_hdg";
+static XPLMDataRef dataref_debug_spin_hdg = NULL;
 
 #define DATAREF_WRITABLE (1)
 
@@ -87,6 +91,14 @@ static double get_model_offset_length(void *inRefcon) {
 
 static void set_model_offset_length(void *inRefcon, double inValue) {
     model_length_offset_meters = inValue;
+}
+
+static double get_debug_spin_hdg(void *inRefcon) {
+    return debug_spin_hdg;
+}
+
+static void set_debug_spin_hdg(void *inRefcon, double inValue) {
+    debug_spin_hdg = inValue;
 }
 
 static void announce_dataref(const char *dataref_name) {
@@ -171,18 +183,26 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             get_model_offset_length,
             set_model_offset_length
         );
+        success &= register_double_dataref(
+            &dataref_debug_spin_hdg,
+            dataref_name_debug_spin_hdg,
+            get_debug_spin_hdg,
+            set_debug_spin_hdg
+        );
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
         }
     }
 
+    bool has_debug_override = (debug_spin_hdg != 0.0);
+
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
         printf("[XPMover] flight loop failed to lock boost frame mutex");
         return CALL_ON_NEXT_FRAME;
     }
 
-    bool is_new = !boost_frame_applied;
+    bool is_new = !boost_frame_applied || has_debug_override;
     if (is_new) {
         boost_frame_copy = boost_frame;
         boost_frame_applied = true;
@@ -192,6 +212,18 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     if (!is_new) {
         return CALL_ON_NEXT_FRAME;
+    }
+
+    if (has_debug_override) {
+        double runtime_seconds = ((double) clock()) / CLOCKS_PER_SEC;
+        // Setting debug_spin_hdg to a non-zero value overrides PSX heading to spin the aircraft around at a constant
+        // rate. The value is the time (in seconds) needed per revolution.
+        // This is useful when trying to find the model length offset: Set the dataref to spin the aircraft, then adjust
+        // the offset dataref until it looks fine.
+        if (debug_spin_hdg != 0.0) {
+            boost_frame_copy.track_degrees_hundreds = (int) roundl((fmod(runtime_seconds, debug_spin_hdg) / debug_spin_hdg) * 360.0 * 100.0);
+        }
+        psx_recalculate_boost_frame(&boost_frame_copy);
     }
 
     // TODO: check difference to previous location, if large call XPLMPlaceUserAtLocation before local positioning?
