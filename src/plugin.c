@@ -40,6 +40,13 @@ static XPLMDataRef dataref_model_height_offset = NULL;
 const char dataref_name_debug_spin_hdg[] = "xpmover/debug/spin_hdg";
 static XPLMDataRef dataref_debug_spin_hdg = NULL;
 
+const char dataref_name_terrain_elevation_meters[] = "xpmover/terrain/elevation_msl_meters";
+static XPLMDataRef dataref_terrain_elevation_meters = NULL;
+
+const char dataref_name_terrain_elevation_remaining_cycles[] = "xpmover/terrain/remaining_cycles";
+static XPLMDataRef dataref_terrain_elevation_remaining_cycles = NULL;
+
+
 #define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
@@ -136,6 +143,36 @@ static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name
     return register_double_dataref(dest, dataref_name, get_double, value_ref, set_double, value_ref);
 }
 
+static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatai_f inReadInt, void *inReadRefcon, XPLMSetDatai_f inWriteInt, void *inWriteRefcon) {
+    *dest = XPLMRegisterDataAccessor(
+        inDataName, xplmType_Int, DATAREF_WRITABLE,
+        inReadInt, inWriteInt,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        inReadRefcon,
+        inWriteRefcon
+    );
+
+    announce_dataref(inDataName);
+
+    return (*dest != NULL);
+}
+
+static int get_int(int *value_ref) {
+    return *value_ref;
+}
+
+static void set_int(int *value_ref, int value) {
+    *value_ref = value;
+}
+
+static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
+    return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
+}
+
 static void unregister_dataref(XPLMDataRef *dataref) {
     if (!dataref) {
         return;
@@ -175,6 +212,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_model_height_offset, dataref_name_model_height_offset, &model_height_offset_meters);
         success &= expose_double_as_dataref(&dataref_model_length_offset, dataref_name_model_length_offset, &model_length_offset_meters);
         success &= expose_double_as_dataref(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
+        success &= expose_double_as_dataref(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
+        success &= expose_int_as_dataref(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
@@ -374,6 +413,8 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_model_height_offset);
     unregister_dataref(&dataref_model_length_offset);
     unregister_dataref(&dataref_debug_spin_hdg);
+    unregister_dataref(&dataref_terrain_elevation_meters);
+    unregister_dataref(&dataref_terrain_elevation_remaining_cycles);
 
     if (probe) {
         XPLMDestroyProbe(probe);
