@@ -11,6 +11,9 @@
 #include "psx.h"
 #include "utils.h"
 
+// forward-declaration to roll back partial initialization when XPluginEnable() fails
+PLUGIN_API void XPluginDisable();
+
 #define CALL_ON_NEXT_FRAME (-1.0f)
 
 static XPLMFlightLoopID flight_loop_after_flight_model_id = {0};
@@ -293,7 +296,7 @@ PLUGIN_API int XPluginEnable() {
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
         printf("[XPMover] failed to create PSX client; aborting startup\n");
-        return 0;
+        goto rollback;
     }
 
     cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
@@ -304,6 +307,10 @@ PLUGIN_API int XPluginEnable() {
     flight_loop_registered = true;
 
     return 1;
+
+rollback:
+    XPluginDisable();
+    return 0;
 }
 
 PLUGIN_API void XPluginDisable() {
