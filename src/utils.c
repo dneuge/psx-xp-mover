@@ -111,3 +111,25 @@ inline double deg2rad(double degrees) {
 inline double rad2deg(double radians) {
     return radians * FACTOR_DEGREES_PER_RADIAN;
 }
+
+#define METERS_PER_NAUTICAL_MILE (1852)
+#define NAUTICAL_MILES_PER_METER (1.0 / METERS_PER_NAUTICAL_MILE)
+
+inline double nauticalmiles2meters(double nautical_miles) {
+    return nautical_miles * METERS_PER_NAUTICAL_MILE;
+}
+
+inline double meters2nauticalmiles(double meters) {
+    return meters * NAUTICAL_MILES_PER_METER;
+}
+
+#define METERS_PER_FOOT (0.3048)
+#define FEET_PER_METER (1.0 / METERS_PER_FOOT)
+
+inline double feet2meters(double feet) {
+    return feet * METERS_PER_FOOT;
+}
+
+inline double meters2feet(double meters) {
+    return meters * FEET_PER_METER;
+}

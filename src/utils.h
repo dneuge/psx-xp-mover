@@ -15,4 +15,10 @@ char* copy_string(char *s);
 double deg2rad(double degrees);
 double rad2deg(double radians);
 
+double nauticalmiles2meters(double nautical_miles);
+double meters2nauticalmiles(double meters);
+
+double feet2meters(double feet);
+double meters2feet(double meters);
+
 #endif

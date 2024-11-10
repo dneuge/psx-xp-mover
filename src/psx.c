@@ -13,8 +13,6 @@
 
 #include "utils.h"
 
-#define FACTOR_FEET_TO_METERS (0.3048)
-
 #define BOOST_FIELD_SEPARATOR ';'
 #define BOOST_FLAG_GROUND 'G'
 #define BOOST_FLAG_FLIGHT 'F'
@@ -136,7 +134,7 @@ bool psx_recalculate_boost_frame(psx_boost_frame_t *frame) {
     // If we can get reasonably good values: Great! But if we can't: It's not our focus (at least not yet).
     double flight_deck_altitude_msl_feet = ((double)frame->flight_deck_altitude_msl_feet_hundreds) / 100.0;
     double airframe_center_altitude_feet = flight_deck_altitude_msl_feet - (28.412073 + (92.5 * sin(deg2rad((double) frame->pitch_degrees))));
-    frame->elevation_msl_meters = airframe_center_altitude_feet * FACTOR_FEET_TO_METERS;
+    frame->elevation_msl_meters = feet2meters(airframe_center_altitude_feet);
 
     return true;
 }
