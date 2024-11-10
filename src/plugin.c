@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <XPLMDataAccess.h>
@@ -46,6 +47,33 @@ static XPLMDataRef dataref_terrain_elevation_meters = NULL;
 const char dataref_name_terrain_elevation_remaining_cycles[] = "xpmover/terrain/remaining_cycles";
 static XPLMDataRef dataref_terrain_elevation_remaining_cycles = NULL;
 
+const char dataref_name_ground_contact_cycles[] = "xpmover/terrain/blending/ground_contact_cycles";
+static XPLMDataRef dataref_ground_contact_cycles = NULL;
+
+const char dataref_name_ground_contact_fraction[] = "xpmover/terrain/blending/ground_contact_fraction";
+static XPLMDataRef dataref_ground_contact_fraction = NULL;
+
+const char dataref_name_firm_ground_speed[] = "xpmover/terrain/blending/firm_ground_speed";
+static XPLMDataRef dataref_firm_ground_speed = NULL;
+
+const char dataref_name_lift_ground_speed[] = "xpmover/terrain/blending/lift_ground_speed";
+static XPLMDataRef dataref_lift_ground_speed = NULL;
+
+const char dataref_name_low_speed_fraction[] = "xpmover/terrain/blending/low_speed_fraction";
+static XPLMDataRef dataref_low_speed_fraction = NULL;
+
+const char dataref_name_low_speed_fraction_factor[] = "xpmover/terrain/blending/low_speed_fraction_factor";
+static XPLMDataRef dataref_low_speed_fraction_factor = NULL;
+
+const char dataref_name_elevation_blending_fraction[] = "xpmover/terrain/blending/elevation_blending_fraction";
+static XPLMDataRef dataref_elevation_blending_fraction = NULL;
+
+const char dataref_name_calculated_ground_speed[] = "xpmover/ground_speed_calculated";
+static XPLMDataRef dataref_calculated_ground_speed = NULL;
+
+const char dataref_name_publish_ground_speed[] = "xpmover/publish/ground_speed_calculated";
+static XPLMDataRef dataref_publish_ground_speed = NULL;
+
 
 #define DATAREF_WRITABLE (1)
 
@@ -60,13 +88,33 @@ static XPLMDataRef dataref_theta_pitch = NULL;
 static XPLMDataRef dataref_local_x = NULL;
 static XPLMDataRef dataref_local_y = NULL;
 static XPLMDataRef dataref_local_z = NULL;
+static XPLMDataRef dataref_ground_speed = NULL;
+static XPLMDataRef dataref_ground_speed2 = NULL;
 static bool datarefs_initialized = false;
 
 static XPLMProbeRef probe = NULL;
 static XPLMProbeInfo_t *probe_info = NULL;
 static double terrain_elevation_meters = NAN;
 static int terrain_elevation_remaining_cycles = 0;
-#define TERRAIN_ELEVATION_MAX_AGE_CYCLES (30 /* seconds */ * 60 /* FPS */)
+#define TERRAIN_ELEVATION_MAX_AGE_CYCLES (30 /* seconds */ * 60 /* FPS */) /* should be set much higher than ground_contact_cycles */
+
+#define MAX_GROUND_CONTACT_CYCLES (2 /* seconds */ * 60 /* FPS */)
+static int ground_contact_cycles = 0; // sliding cycle count of PSX signalling ground contact (incrementing to max cycles) or flight (decrementing to zero)
+static double ground_contact_fraction = 0.0; // fraction of ground_contact_cycles/max, 1.0 = "long enough in ground contact", 0.0 = "long enough in flight"
+static double firm_ground_speed = 60.0;  // approximate ground speed at which the aircraft should be firmly pinned to ground
+static double lift_ground_speed = 160.0; // approximate ground speed at which the aircraft should have left ground
+static double low_speed_fraction = 0.0; // fraction between "firm" (1.0) and "lift" (0.0) ground speeds
+static double low_speed_fraction_factor = 0.8; // controls the effect of low_speed_fraction on overall blending fraction
+static double elevation_blending_fraction = 0.0; // blends between XP and PSX elevations; 1.0 = fully pin to X-Plane terrain, 0.0 = fully apply PSX value
+
+#define PSX_MAX_FPS (77)
+#define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
+#define MAX_REALTIME_GROUND_SPEED (700)
+#define MAX_GROUND_SPEED (PSX_MAX_TIME_ACCELERATION_FACTOR * MAX_REALTIME_GROUND_SPEED)
+
+#define MILLISECONDS_PER_HOUR (3600000)
+static double calculated_ground_speed = 0.0;
+static bool publish_ground_speed = true;
 
 static xpint_t disable_planepath[] = {1};
 
@@ -75,6 +123,11 @@ static psx_client_t *psx_client = NULL;
 static psx_boost_frame_t boost_frame = {0};
 static bool boost_frame_applied = false;
 static mtx_t boost_frame_mutex;
+
+#define MAX_NUM_PREVIOUS_BOOST_FRAMES (2 * PSX_MAX_FPS)
+static psx_boost_frame_t previous_boost_frames[MAX_NUM_PREVIOUS_BOOST_FRAMES] = {0};
+static int previous_boost_frame_index = 0;
+static int num_previous_boost_frames = 0;
 
 #define INIT_CYCLES_TO_OVERRIDE_PLANE_PATH (10);
 static int cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
@@ -220,6 +273,100 @@ static void unregister_dataref(XPLMDataRef *dataref) {
     *dataref = NULL;
 }
 
+static int get_bool(void *inRefcon) {
+    return *((bool*)inRefcon) ? 1 : 0;
+}
+
+static void set_bool(void *inRefcon, int value) {
+    *((bool*)inRefcon) = (value != 0);
+}
+
+static bool expose_bool_as_dataref(XPLMDataRef *dest, const char *dataref_name, bool *value_ref) {
+    if (!value_ref) {
+        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        return false;
+    }
+    return register_int_dataref(dest, dataref_name, get_bool, value_ref, set_bool, value_ref);
+}
+
+static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_millis, int reference_millis_part, int minimum_age_millis, int maximum_age_millis) {
+    int index = previous_boost_frame_index;
+    psx_boost_frame_t *current_frame = NULL;
+    psx_boost_frame_t *previous_frame = NULL;
+    int previous_frame_age_millis = 0;
+    int current_frame_age_millis = 0;
+    bool is_previous_frame_too_young = true;
+    bool is_current_frame_too_young = true;
+    bool is_current_frame_too_old = false;
+
+    //printf("[XPMover] -------------[find frame]-------------\n"); // DEBUG
+    //printf("[XPMover] num_previous_boost_frames=%d\n", num_previous_boost_frames);
+
+    for (int i=0; i<num_previous_boost_frames; i++) {
+        previous_frame = current_frame;
+        previous_frame_age_millis = current_frame_age_millis;
+        is_previous_frame_too_young = is_current_frame_too_young;
+        //printf("[XPMover] i=%d, index=%d, reference_millis_part=%d, previous_frame=%p, previous_frame_age_millis=%d, is_previous_frame_too_young=%d\n", i, index, reference_millis_part, previous_frame, previous_frame_age_millis, is_previous_frame_too_young); // DEBUG
+
+        current_frame = &(previous_boost_frames[index]);
+        //psx_print_boost_frame(current_frame); // DEBUG
+        int frame_diff_millis = reference_millis_part - current_frame->timestamp_millis_part;
+        if (frame_diff_millis < 0) {
+            frame_diff_millis += 1000;
+        } else if (frame_diff_millis >= 1000) {
+            //printf("[XPMover] find_previous_boost_frame_by_age: bad frame difference %d\n", frame_diff_millis);
+            return NULL;
+        }
+
+        current_frame_age_millis += frame_diff_millis;
+        is_current_frame_too_young = (current_frame_age_millis < minimum_age_millis);
+        is_current_frame_too_old = (current_frame_age_millis > maximum_age_millis);
+        //printf("[XPMover] current_frame_age_millis=%d, is_current_frame_too_young=%d, is_current_frame_too_old=%d\n", current_frame_age_millis, is_current_frame_too_young, is_current_frame_too_old); // DEBUG
+        if (is_current_frame_too_old) {
+            break;
+        }
+
+        index--;
+        if (index < 0) {
+            index = MAX_NUM_PREVIOUS_BOOST_FRAMES - 1;
+        }
+        reference_millis_part = current_frame->timestamp_millis_part;
+    }
+
+    //printf("[XPMover] result: current_frame=%p, previous_frame=%p, is_current_frame_too_young=%d, is_current_frame_too_old=%d, is_previous_frame_too_young=%d\n", current_frame, previous_frame, is_current_frame_too_young, is_current_frame_too_old, is_previous_frame_too_young); // DEBUG
+
+    if (current_frame && !(is_current_frame_too_young || is_current_frame_too_old)) {
+        // current frame matches
+        //printf("[XPMover] using current frame\n"); // DEBUG
+        *actual_age_millis = current_frame_age_millis;
+        return current_frame;
+    }
+
+    if (!is_previous_frame_too_young) {
+        // current frame did not match but previous one did
+        //printf("[XPMover] using previous frame\n"); // DEBUG
+        *actual_age_millis = previous_frame_age_millis;
+        return previous_frame;
+    }
+
+    // no frame matched
+    //printf("[XPMover] no frame matched\n"); // DEBUG
+    return NULL;
+}
+
+static void clear_previous_boost_frames() {
+    num_previous_boost_frames = 0;
+}
+
+static void record_boost_frame(psx_boost_frame_t *frame) {
+    int index = (previous_boost_frame_index + 1) % MAX_NUM_PREVIOUS_BOOST_FRAMES;
+    previous_boost_frames[index] = *frame;
+    if (num_previous_boost_frames < MAX_NUM_PREVIOUS_BOOST_FRAMES) {
+        num_previous_boost_frames++;
+    }
+    previous_boost_frame_index = index;
+}
+
 static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon)
 {
     // https://developer.x-plane.com/article/movingtheplane/
@@ -237,6 +384,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= find_dataref(&dataref_local_x, "sim/flightmodel/position/local_x");
         success &= find_dataref(&dataref_local_y, "sim/flightmodel/position/local_y");
         success &= find_dataref(&dataref_local_z, "sim/flightmodel/position/local_z");
+        success &= find_dataref(&dataref_ground_speed, "sim/flightmodel/position/groundspeed");
+        success &= find_dataref(&dataref_ground_speed2, "sim/flightmodel2/position/groundspeed");
 
         if (success) {
             datarefs_initialized = true;
@@ -252,6 +401,15 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
         success &= expose_double_as_dataref(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
         success &= expose_int_as_dataref(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
+        success &= expose_int_as_dataref(&dataref_ground_contact_cycles, dataref_name_ground_contact_cycles, &ground_contact_cycles);
+        success &= expose_double_as_dataref(&dataref_ground_contact_fraction, dataref_name_ground_contact_fraction, &ground_contact_fraction);
+        success &= expose_double_as_dataref(&dataref_firm_ground_speed, dataref_name_firm_ground_speed, &firm_ground_speed);
+        success &= expose_double_as_dataref(&dataref_lift_ground_speed, dataref_name_lift_ground_speed, &lift_ground_speed);
+        success &= expose_double_as_dataref(&dataref_low_speed_fraction, dataref_name_low_speed_fraction, &low_speed_fraction);
+        success &= expose_double_as_dataref(&dataref_low_speed_fraction_factor, dataref_name_low_speed_fraction_factor, &low_speed_fraction_factor);
+        success &= expose_double_as_dataref(&dataref_elevation_blending_fraction, dataref_name_elevation_blending_fraction, &elevation_blending_fraction);
+        success &= expose_double_as_dataref(&dataref_calculated_ground_speed, dataref_name_calculated_ground_speed, &calculated_ground_speed);
+        success &= expose_bool_as_dataref(&dataref_publish_ground_speed, dataref_name_publish_ground_speed, &publish_ground_speed);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
@@ -321,6 +479,98 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     // TODO: check difference to previous location, if large call XPLMPlaceUserAtLocation before local positioning? (may be needed to prevent wrong hypoxia on load)
 
+    // calculate ground speed
+    int ground_speed_reference_boost_frame_age_millis = -1;
+    psx_boost_frame_t *ground_speed_reference_boost_frame = find_previous_boost_frame_by_age(&ground_speed_reference_boost_frame_age_millis, boost_frame_copy.timestamp_millis_part, 800, 1500);
+    if (ground_speed_reference_boost_frame) {
+        double diff_distance_meters = great_circle_distance_meters(
+            ground_speed_reference_boost_frame->flight_deck_latitude,
+            ground_speed_reference_boost_frame->flight_deck_longitude,
+            boost_frame_copy.flight_deck_latitude,
+            boost_frame_copy.flight_deck_longitude
+        );
+        calculated_ground_speed = meters2nauticalmiles((diff_distance_meters * MILLISECONDS_PER_HOUR) / ground_speed_reference_boost_frame_age_millis);
+
+        /*
+        // DEBUG
+        printf("[XPMover] -----------[CALC GROUND SPEED]------------\n");
+        psx_print_boost_frame(&boost_frame_copy);
+        psx_print_boost_frame(ground_speed_reference_boost_frame);
+        printf("[XPMover] reference ground speed frame age: %d\n", ground_speed_reference_boost_frame_age_millis);
+        printf("[XPMover] distance: %lf meters (%lf nm)\n", diff_distance_meters, meters2nauticalmiles(diff_distance_meters));
+        */
+    }
+    record_boost_frame(&boost_frame_copy);
+
+    if (calculated_ground_speed < 0.0) {
+        calculated_ground_speed = 0.0;
+    } else if (calculated_ground_speed > MAX_GROUND_SPEED) {
+        calculated_ground_speed = MAX_GROUND_SPEED;
+    }
+
+    if (publish_ground_speed) {
+        double ground_speed_meters = nauticalmiles2meters(calculated_ground_speed);
+        XPLMSetDatad(dataref_ground_speed, ground_speed_meters);
+        XPLMSetDatad(dataref_ground_speed2, ground_speed_meters);
+    }
+
+    // calculate low speed fraction for elevation blending
+    if (calculated_ground_speed <= firm_ground_speed) {
+        low_speed_fraction = 1.0;
+    } else if (calculated_ground_speed >= lift_ground_speed) {
+        low_speed_fraction = 0.0;
+    } else if (firm_ground_speed < lift_ground_speed) {
+        double ground_speed_transition_width = lift_ground_speed - firm_ground_speed;
+        low_speed_fraction = 1.0 - ((calculated_ground_speed - firm_ground_speed) / ground_speed_transition_width);
+        if (low_speed_fraction < 0.0) {
+            low_speed_fraction = 0.0;
+        } else if (low_speed_fraction > 1.0) {
+            low_speed_fraction = 1.0;
+        }
+    }
+
+    // calculate ground contact fraction (~time since touchdown or liftoff) for elevation blending
+    if (boost_frame_copy.ground_contact) {
+        ground_contact_cycles++;
+    } else {
+        ground_contact_cycles--;
+    }
+    if (ground_contact_cycles > MAX_GROUND_CONTACT_CYCLES) {
+        ground_contact_cycles = MAX_GROUND_CONTACT_CYCLES;
+    } else if (ground_contact_cycles < 0) {
+        ground_contact_cycles = 0;
+    }
+
+    ground_contact_fraction = ((double)ground_contact_cycles) / MAX_GROUND_CONTACT_CYCLES;
+    if (ground_contact_fraction < 0.0) {
+        ground_contact_fraction = 0.0;
+    } else if (ground_contact_fraction > 1.0) {
+        ground_contact_fraction = 1.0;
+    }
+
+    // calculate fraction of elevation blending
+    bool need_xplane_elevation = true;
+    if (low_speed_fraction == 0.0 && ground_contact_fraction == 0.0) {
+        // fully transitioned to flight, apply unadjusted PSX altitude
+        elevation_blending_fraction = 0.0;
+        need_xplane_elevation = false;
+    } else if (low_speed_fraction == 1.0 && ground_contact_fraction == 1.0) {
+        // fully transitioned to ground, pin to X-Plane terrain
+        elevation_blending_fraction = 1.0;
+    } else {
+        // in transition between ground and flight
+        // The definite factor should be PSX-indicated ground contact. However, we already want to start transitioning
+        // from XP to PSX during the takeoff roll by some degree to feel more natural, which is accomplished by adding
+        // some amount of our "low speed fraction". The total factor is then clamped to the original range.
+        elevation_blending_fraction = ground_contact_fraction - ((1.0-low_speed_fraction) * low_speed_fraction_factor);
+        if (elevation_blending_fraction < 0.0) {
+            elevation_blending_fraction = 0.0;
+        } else if (elevation_blending_fraction > 1.0) {
+            elevation_blending_fraction = 1.0;
+        }
+    }
+
+    // transform PSX flight deck lat/lon and aircraft center elevation to X-Plane OpenGL coordinates (meters)
     double local_x = 0.0;
     double local_y = 0.0;
     double local_z = 0.0;
@@ -331,11 +581,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     local_x -= sin(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
     local_z += cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
 
-    if (!boost_frame_copy.ground_contact) {
-        // revoke terrain elevation; must be recalculated at least once the next time we touch ground
-        terrain_elevation_meters = NAN;
-    } else {
-        // probe terrain at current position
+    // probe terrain at current position, if needed
+    if (need_xplane_elevation) {
         XPLMProbeResult probe_result = XPLMProbeTerrainXYZ(probe, (float) local_x, (float) local_y, (float) local_z, probe_info);
         if (probe_result == xplm_ProbeHitTerrain) {
             // if the probed object moves it cannot be terrain but is probably some scenery object, ignore it
@@ -351,14 +598,27 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
                 terrain_elevation_remaining_cycles = TERRAIN_ELEVATION_MAX_AGE_CYCLES;
             }
         }
+    }
 
-        if (!isnan(terrain_elevation_meters)) {
-            // pin to ground; only update local_y
-            // TODO: transition between PSX altitude and XP terrain elevation, e.g. based on speed
-            double _ignore_local_x = 0.0;
-            double _ignore_local_z = 0.0;
-            XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, terrain_elevation_meters + model_height_offset_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
+    // adjust elevation as needed for terrain blending/pinning
+    if ((elevation_blending_fraction > 0.0) && !isnan(terrain_elevation_meters)) {
+        double adjusted_elevation_meters;
+        if (elevation_blending_fraction == 1.0) {
+            // pin to ground
+            adjusted_elevation_meters = terrain_elevation_meters;
+        } else {
+            // blend between XP and PSX
+            double elevation_difference = boost_frame_copy.elevation_msl_meters - terrain_elevation_meters;
+            adjusted_elevation_meters = boost_frame_copy.elevation_msl_meters - (elevation_blending_fraction * elevation_difference);
         }
+
+        // apply model offset
+        adjusted_elevation_meters += model_height_offset_meters;
+
+        // recalculate local_y (elevation); keep local_x/local_z (lateral position)
+        double _ignore_local_x = 0.0;
+        double _ignore_local_z = 0.0;
+        XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, adjusted_elevation_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
     }
 
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
@@ -417,6 +677,7 @@ PLUGIN_API int XPluginEnable() {
     }
 
     cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
+    clear_previous_boost_frames(); // TODO: also clear on PSX reconnect
 
     flight_loop_after_flight_model_id = XPLMCreateFlightLoop(&params);
 
@@ -453,6 +714,15 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_debug_spin_hdg);
     unregister_dataref(&dataref_terrain_elevation_meters);
     unregister_dataref(&dataref_terrain_elevation_remaining_cycles);
+    unregister_dataref(&dataref_ground_contact_cycles);
+    unregister_dataref(&dataref_ground_contact_fraction);
+    unregister_dataref(&dataref_firm_ground_speed);
+    unregister_dataref(&dataref_lift_ground_speed);
+    unregister_dataref(&dataref_low_speed_fraction);
+    unregister_dataref(&dataref_low_speed_fraction_factor);
+    unregister_dataref(&dataref_elevation_blending_fraction);
+    unregister_dataref(&dataref_calculated_ground_speed);
+    unregister_dataref(&dataref_publish_ground_speed);
 
     if (probe) {
         XPLMDestroyProbe(probe);

@@ -133,3 +133,44 @@ inline double feet2meters(double feet) {
 inline double meters2feet(double meters) {
     return meters * FEET_PER_METER;
 }
+
+#define MEAN_RADIUS_EARTH (6371009)
+
+/**
+ * Calculates the distance between both coordinates using the
+ * Haversine method. This method provides an accuracy of 0.5% which is okay
+ * for small distances only. If unsure, use Vincenty method or let
+ * greatCircleDistanceInMeters decide which method to use.
+ *
+ * @param latitude1  first coordinate latitude
+ * @param longitude1 first coordinate longitude
+ * @param latitude2  second coordinate latitude
+ * @param longitude2 second coordinate longitude
+ * @return distance in meters with an accuracy of 0.5%
+ * @see https://en.wikipedia.org/wiki/Great-circle_distance
+ */
+double great_circle_distance_meters_haversine(const double latitude1, const double longitude1, const double latitude2, const double longitude2) {
+    // convert coordinates given in degrees to radians needed for calculation
+    double latitude1Radians = deg2rad(latitude1);
+    double longitude1Radians = deg2rad(longitude1);
+    double latitude2Radians = deg2rad(latitude2);
+    double longitude2Radians = deg2rad(longitude2);
+
+    double deltaLatitude = fabs(latitude1Radians - latitude2Radians); // delta phi
+    double deltaLongitude = fabs(longitude1Radians - longitude2Radians); // delta lambda
+
+    double singleSineHalfDeltaLatitude = sin(deltaLatitude / 2.0);
+    double haversineDeltaLatitude = singleSineHalfDeltaLatitude * singleSineHalfDeltaLatitude;
+
+    double singleSineHalfDeltaLongitude = sin(deltaLongitude / 2.0);
+    double haversineDeltaLongitude = singleSineHalfDeltaLongitude * singleSineHalfDeltaLongitude;
+
+    double centralAngle = 2.0 * asin(sqrt(haversineDeltaLatitude + cos(latitude1Radians) * cos(latitude2Radians) * haversineDeltaLongitude));
+    double distanceMeters = MEAN_RADIUS_EARTH * centralAngle;
+
+    return distanceMeters;
+}
+
+double great_circle_distance_meters(double latitude1, double longitude1, double latitude2, double longitude2) {
+    return great_circle_distance_meters_haversine(latitude1, longitude1, latitude2, longitude2);
+}
