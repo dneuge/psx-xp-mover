@@ -98,6 +98,7 @@ static double terrain_elevation_meters = NAN;
 static int terrain_elevation_remaining_cycles = 0;
 #define TERRAIN_ELEVATION_MAX_AGE_CYCLES (30 /* seconds */ * 60 /* FPS */) /* should be set much higher than ground_contact_cycles */
 
+#define MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS (5) /* how many cycles should be averaged to smooth elevation blending? */
 #define MAX_GROUND_CONTACT_CYCLES (2 /* seconds */ * 60 /* FPS */)
 static int ground_contact_cycles = 0; // sliding cycle count of PSX signalling ground contact (incrementing to max cycles) or flight (decrementing to zero)
 static double ground_contact_fraction = 0.0; // fraction of ground_contact_cycles/max, 1.0 = "long enough in ground contact", 0.0 = "long enough in flight"
@@ -105,7 +106,10 @@ static double firm_ground_speed = 60.0;  // approximate ground speed at which th
 static double lift_ground_speed = 160.0; // approximate ground speed at which the aircraft should have left ground
 static double low_speed_fraction = 0.0; // fraction between "firm" (1.0) and "lift" (0.0) ground speeds
 static double low_speed_fraction_factor = 0.8; // controls the effect of low_speed_fraction on overall blending fraction
-static double elevation_blending_fraction = 0.0; // blends between XP and PSX elevations; 1.0 = fully pin to X-Plane terrain, 0.0 = fully apply PSX value
+static double elevation_blending_fraction = 0.0; // blends between XP and PSX elevations; 1.0 = fully pin to X-Plane terrain, 0.0 = fully apply PSX value; smoothed output
+static double raw_elevation_blending_fractions[MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS] = {0}; // raw blending fractions (not smoothed yet)
+static int next_raw_elevation_blending_fractions_index = 0;
+static int num_raw_elevation_blending_fractions = 0;
 
 #define PSX_MAX_FPS (77)
 #define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
@@ -367,6 +371,60 @@ static void record_boost_frame(psx_boost_frame_t *frame) {
     previous_boost_frame_index = index;
 }
 
+static void clear_raw_elevation_blending_fractions() {
+    for (int i=0; i<MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS; i++) {
+        raw_elevation_blending_fractions[i] = NAN;
+    }
+    next_raw_elevation_blending_fractions_index = 0;
+    num_raw_elevation_blending_fractions = 0;
+}
+
+static void record_raw_elevation_blending_fraction(double raw_elevation_blending_fraction) {
+    raw_elevation_blending_fractions[next_raw_elevation_blending_fractions_index] = raw_elevation_blending_fraction;
+
+    if (num_raw_elevation_blending_fractions < MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS) {
+        num_raw_elevation_blending_fractions++;
+    }
+
+    next_raw_elevation_blending_fractions_index = (next_raw_elevation_blending_fractions_index + 1) % MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS;
+}
+
+static double get_average_elevation_blending_fraction() {
+    double sum = 0.0;
+    int count = 0;
+    bool all_in_flight = true;
+    for (int i=0; i<MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS; i++) {
+        double fraction = raw_elevation_blending_fractions[i];
+        if (isnan(fraction)) {
+            continue;
+        }
+        if (fraction != 0.0) {
+            all_in_flight = false;
+        }
+        sum += fraction;
+        count++;
+    }
+
+    if (all_in_flight) {
+        return 0.0;
+    }
+
+    if (count == 0) {
+        return NAN;
+    }
+
+    double average = sum / count;
+    if (average < 0.0) {
+        return 0.0;
+    }
+
+    if (average > 1.0) {
+        return 1.0;
+    }
+
+    return average;
+}
+
 static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon)
 {
     // https://developer.x-plane.com/article/movingtheplane/
@@ -549,26 +607,29 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     }
 
     // calculate fraction of elevation blending
-    bool need_xplane_elevation = true;
+    double raw_elevation_blending_fraction = NAN;
     if (low_speed_fraction == 0.0 && ground_contact_fraction == 0.0) {
         // fully transitioned to flight, apply unadjusted PSX altitude
-        elevation_blending_fraction = 0.0;
-        need_xplane_elevation = false;
+        raw_elevation_blending_fraction = 0.0;
     } else if (low_speed_fraction == 1.0 && ground_contact_fraction == 1.0) {
         // fully transitioned to ground, pin to X-Plane terrain
-        elevation_blending_fraction = 1.0;
+        raw_elevation_blending_fraction = 1.0;
     } else {
         // in transition between ground and flight
         // The definite factor should be PSX-indicated ground contact. However, we already want to start transitioning
         // from XP to PSX during the takeoff roll by some degree to feel more natural, which is accomplished by adding
         // some amount of our "low speed fraction". The total factor is then clamped to the original range.
-        elevation_blending_fraction = ground_contact_fraction - ((1.0-low_speed_fraction) * low_speed_fraction_factor);
-        if (elevation_blending_fraction < 0.0) {
-            elevation_blending_fraction = 0.0;
-        } else if (elevation_blending_fraction > 1.0) {
-            elevation_blending_fraction = 1.0;
+        raw_elevation_blending_fraction = ground_contact_fraction - ((1.0-low_speed_fraction) * low_speed_fraction_factor);
+        if (raw_elevation_blending_fraction < 0.0) {
+            raw_elevation_blending_fraction = 0.0;
+        } else if (raw_elevation_blending_fraction > 1.0) {
+            raw_elevation_blending_fraction = 1.0;
         }
     }
+
+    // smooth elevation blending fraction
+    record_raw_elevation_blending_fraction(raw_elevation_blending_fraction);
+    elevation_blending_fraction = get_average_elevation_blending_fraction();
 
     // transform PSX flight deck lat/lon and aircraft center elevation to X-Plane OpenGL coordinates (meters)
     double local_x = 0.0;
@@ -582,6 +643,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     local_z += cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
 
     // probe terrain at current position, if needed
+    bool need_xplane_elevation = (elevation_blending_fraction != 0.0);
     if (need_xplane_elevation) {
         XPLMProbeResult probe_result = XPLMProbeTerrainXYZ(probe, (float) local_x, (float) local_y, (float) local_z, probe_info);
         if (probe_result == xplm_ProbeHitTerrain) {
@@ -678,6 +740,7 @@ PLUGIN_API int XPluginEnable() {
 
     cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
     clear_previous_boost_frames(); // TODO: also clear on PSX reconnect
+    clear_raw_elevation_blending_fractions(); // TODO: also clear on PSX reconnect
 
     flight_loop_after_flight_model_id = XPLMCreateFlightLoop(&params);
 
