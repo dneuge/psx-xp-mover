@@ -794,6 +794,11 @@ PLUGIN_API void XPluginDisable() {
         XPLMDestroyProbe(probe);
         probe = NULL;
     }
+
+    if (probe_info) {
+        free(probe_info);
+        probe_info = NULL;
+    }
 }
 
 PLUGIN_API void XPluginStop() {
