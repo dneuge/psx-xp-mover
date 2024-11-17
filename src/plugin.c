@@ -125,7 +125,7 @@ static xpint_t disable_planepath[] = {1};
 static psx_client_t *psx_client = NULL;
 
 static psx_boost_frame_t boost_frame = {0};
-static bool boost_frame_applied = false;
+static bool boost_frame_applied = true;
 static mtx_t boost_frame_mutex;
 
 #define MAX_NUM_PREVIOUS_BOOST_FRAMES (2 * PSX_MAX_FPS)
@@ -718,6 +718,9 @@ PLUGIN_API int XPluginEnable() {
         printf("[XPMover] internal variables are already set, another instance appears to still be running; aborting startup\n");
         return 0;
     }
+
+    // prevent dummy/outdated data being applied before we receive the first PSX frame
+    boost_frame_applied = true;
 
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
