@@ -41,7 +41,7 @@ function download {
         [[ -e download.tmp ]] && (rm download.tmp || die "deleting temporary file download.tmp failed")
         curl "${url}" -L -o download.tmp || die "download failed"
         
-        actual_size="$(wc -c download.tmp | cut -d' ' -f1)"
+        actual_size="$(wc -c download.tmp | sed -e 's#^[[:space:]]*##g' | cut -d' ' -f1)"
         actual_shasum="$(sha256sum download.tmp | cut -d' ' -f1)"
         actual_mdsum="$(md5sum download.tmp | cut -d' ' -f1)"
         

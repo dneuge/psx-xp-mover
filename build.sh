@@ -18,8 +18,7 @@ function die {
 
 source _build_target.sh || die "Failed to include build target script"
 
-num_cpus=$(cat /proc/cpuinfo | grep -E 'processor\s*:' | nl | tail -n1 | sed -e 's/\s*\([0-9]\+\)\s.*/\1/')
-num_jobs=$(( $num_cpus + 1 ))
+num_jobs=$(( $NUM_CPUS + 1 ))
 
 [[ -d "${build_dir}" ]] && rm -Rf "${build_dir}"
 mkdir -p "${build_dir}"
@@ -30,7 +29,7 @@ mkdir -p "${release_dir}"
 ## BUILD
 cd "${build_dir}"
 
-cmake -D XPLANE_TARGET="${XPLANE_TARGET}" .. || die "CMake failed"
+cmake -D XPLANE_TARGET="${XPLANE_TARGET}" -D BUILD_TARGET="${BUILD_TARGET}" .. || die "CMake failed"
 make -j$num_jobs || die "make failed"
 
 ## COPY

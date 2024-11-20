@@ -2,7 +2,16 @@
 #define PSX_H
 
 #include <stdbool.h>
+
+#define THREADS_COMPAT_MAC
+
+#ifndef NEED_C11_THREADS_WRAPPER
 #include <threads.h>
+#elif BUILD_TARGET_MACOS
+#include "threads_macos.h"
+#else
+#error "missing threads compatibility"
+#endif
 
 #include <netdb.h>
 
