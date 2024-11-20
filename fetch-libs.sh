@@ -85,7 +85,7 @@ function download {
     
     # if there was a single directory on root level, pull it up
     subs="$(find "${extract_dir}" -mindepth 1 -maxdepth 1)"
-    if [[ "$(nl <<<"$subs" | tail -n1 | sed -e 's/\s*\([0-9]\+\)\s.*/\1/')" == "1" && -d "${subs}" ]]; then
+    if [[ "$(nl <<<"$subs" | tail -n1 | sed -r -e 's/[[:space:]]*([0-9]+)[[:space:]].*/\1/')" == "1" && -d "${subs}" ]]; then
         [[ ! -e "_tmp" ]] || die "unable to pull up directory, _tmp exists already"
         mv "${subs}" _tmp || die "failed to pull directory ${subs} up (1)"
         rmdir "${extract_dir}" || die "failed to pull directory ${subs} up (2)"
