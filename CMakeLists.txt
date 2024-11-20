@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.25)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.22.1)
 PROJECT(xpmover)
 
 INCLUDE(CheckIncludeFile)
@@ -8,6 +8,16 @@ SET(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 #SET(CMAKE_FIND_DEBUG_MODE TRUE)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
 SET(BUILD_TESTS TRUE)
+
+IF(CMAKE_VERSION VERSION_LESS "3.25")
+    MESSAGE(WARNING "Your CMake version is outdated and does not detect Linux as such. Applying workaround to distinguish from MacOS. Update to CMake 3.25 or later if you can.")
+    IF(UNIX)
+        IF(NOT APPLE)
+            MESSAGE(STATUS "Detected UNIX but not APPLE, assuming we are building for LINUX...")
+            SET(LINUX)
+        ENDIF()
+    ENDIF()
+ENDIF()
 
 #FIND_PACKAGE(OpenGL REQUIRED)
 
