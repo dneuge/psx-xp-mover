@@ -2,6 +2,8 @@
 cmake-build-debug
 *.iml
 
+*~
+
 build
 lib
 release
