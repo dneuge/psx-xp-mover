@@ -126,7 +126,7 @@ static psx_client_t *psx_client = NULL;
 
 static psx_boost_frame_t boost_frame = {0};
 static bool boost_frame_applied = true;
-static mtx_t boost_frame_mutex;
+static mtx_t boost_frame_mutex = {0};
 
 #define MAX_NUM_PREVIOUS_BOOST_FRAMES (2 * PSX_MAX_FPS)
 static psx_boost_frame_t previous_boost_frames[MAX_NUM_PREVIOUS_BOOST_FRAMES] = {0};
