@@ -142,7 +142,7 @@ static XPLMPluginID dataref_editor_plugin_id = XPLM_NO_PLUGIN_ID;
 
 static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
-        printf("[XPMover] receive callback failed to lock boost frame mutex");
+        printf("[XPMover] receive callback failed to lock boost frame mutex\n");
         return;
     }
 
@@ -507,7 +507,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     bool has_debug_override = (debug_spin_hdg != 0.0);
 
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
-        printf("[XPMover] flight loop failed to lock boost frame mutex");
+        printf("[XPMover] flight loop failed to lock boost frame mutex\n");
         return CALL_ON_NEXT_FRAME;
     }
 

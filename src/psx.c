@@ -27,7 +27,7 @@ const char exit_line[] = "exit\n";
 
 void psx_print_boost_frame(psx_boost_frame_t *frame) {
     if (!frame) {
-        printf("[XPMover] psx_print_boost_frame called with NULL");
+        printf("[XPMover] psx_print_boost_frame called with NULL\n");
         return;
     }
 
@@ -65,7 +65,7 @@ static bool parse_ground_flag(bool *dest, char *s, int length) {
 
 bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line) {
     if (!(frame && line)) {
-        printf("[XPMover] psx_parse_boost_frame called with null: frame=%p, line=%p", frame, line);
+        printf("[XPMover] psx_parse_boost_frame called with null: frame=%p, line=%p\n", frame, line);
         return false;
     }
 
