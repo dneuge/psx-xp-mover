@@ -7,7 +7,7 @@
 
 #ifndef NEED_C11_THREADS_WRAPPER
 #include <threads.h>
-#elif BUILD_TARGET_MACOS
+#elif TARGET_MACOS
 #include "threads_macos.h"
 #else
 #error "missing threads compatibility"

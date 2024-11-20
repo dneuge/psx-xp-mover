@@ -16,10 +16,6 @@ SET(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.c
 )
 
-IF($ENV{BUILD_TARGET} STREQUAL "macos")
-    ADD_DEFINITIONS(-DBUILD_TARGET_MACOS)
-ENDIF()
-
 # check if C11 compatibility wrappers are needed for threads.h and subsequently time.h
 CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 IF(NOT HAVE_C11_THREADS)
