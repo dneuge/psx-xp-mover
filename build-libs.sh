@@ -21,9 +21,9 @@ source ./_build_target.sh || die "Failed to include build target script"
 
 [[ -d lib/_build ]] && rm -Rf lib/_build
 mkdir -p lib/_build
-mkdir -p "${script_dir}/lib/_build/GL" || die "Failed to create GL target directory"
+#mkdir -p "${script_dir}/lib/_build/GL" || die "Failed to create GL target directory"
 
-num_cpus=$(cat /proc/cpuinfo | grep -E 'processor\s*:' | nl | tail -n1 | sed -e 's/\s*\([0-9]\+\)\s.*/\1/')
-num_jobs=$(( $num_cpus + 1 ))
+#num_cpus=$(cat /proc/cpuinfo | grep -E 'processor\s*:' | nl | tail -n1 | sed -e 's/\s*\([0-9]\+\)\s.*/\1/')
+#num_jobs=$(( $num_cpus + 1 ))
 
 echo "no libraries need to be built"
