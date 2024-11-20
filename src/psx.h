@@ -3,15 +3,7 @@
 
 #include <stdbool.h>
 
-#define THREADS_COMPAT_MAC
-
-#ifndef NEED_C11_THREADS_WRAPPER
-#include <threads.h>
-#elif TARGET_MACOS
-#include "threads_macos.h"
-#else
-#error "missing threads compatibility"
-#endif
+#include "threads_compat.h"
 
 #include <netdb.h>
 

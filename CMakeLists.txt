@@ -14,6 +14,7 @@ SET(BUILD_TESTS TRUE)
 SET(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/psx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/threads_compat.c
 )
 
 # check if C11 compatibility wrappers are needed for threads.h and subsequently time.h
@@ -21,10 +22,6 @@ CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 IF(NOT HAVE_C11_THREADS)
     ADD_DEFINITIONS(-DNEED_C11_THREADS_WRAPPER)
     #SET(LINK_C11_COMPAT_STATIC "${LIB_BUILD}/libmesa_c11.a")
-
-    IF(APPLE)
-        LIST(APPEND COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/threads_macos.c)
-    ENDIF()
 ENDIF()
 
 SET(XPMOVER_SOURCES
