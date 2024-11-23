@@ -311,8 +311,6 @@ psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_cal
     client->port = port;
     client->on_boost_frame_callback = on_boost_frame_callback;
 
-    client->mutex = (mtx_t) THREADS_MUTEX_INIT;
-
     if (mtx_init(&client->mutex, mtx_plain) != thrd_success) {
         printf("[XPMover] failed to create mutex for PSX client\n");
         goto error;
