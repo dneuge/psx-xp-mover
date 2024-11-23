@@ -126,7 +126,8 @@ static psx_client_t *psx_client = NULL;
 
 static psx_boost_frame_t boost_frame = {0};
 static bool boost_frame_applied = true;
-static mtx_t boost_frame_mutex = THREADS_MUTEX_INIT;
+static mtx_t boost_frame_mutex;
+static bool has_boost_frame_mutex = false;
 
 #define MAX_NUM_PREVIOUS_BOOST_FRAMES (2 * PSX_MAX_FPS)
 static psx_boost_frame_t previous_boost_frames[MAX_NUM_PREVIOUS_BOOST_FRAMES] = {0};
@@ -722,6 +723,12 @@ PLUGIN_API int XPluginEnable() {
     // prevent dummy/outdated data being applied before we receive the first PSX frame
     boost_frame_applied = true;
 
+    if (mtx_init(&boost_frame_mutex, mtx_plain) != thrd_success) {
+        printf("[XPMover] failed to initialize boost frame mutex; aborting startup\n");
+        return 0;
+    }
+    has_boost_frame_mutex = true;
+
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
         printf("[XPMover] failed to create PSX client; aborting startup\n");
@@ -798,6 +805,11 @@ PLUGIN_API void XPluginDisable() {
     if (probe_info) {
         free(probe_info);
         probe_info = NULL;
+    }
+
+    if (has_boost_frame_mutex) {
+        mtx_destroy(&boost_frame_mutex);
+        has_boost_frame_mutex = false;
     }
 }
 
