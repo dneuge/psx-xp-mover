@@ -101,8 +101,7 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg) {
 }
 
 int thrd_sleep(const struct timespec *duration, struct timespec *remaining) {
-	// FIXME: implement
-	return thrd_error;
+	return nanosleep(duration, remaining);
 }
 
 int thrd_join(thrd_t thr, int *res) {
