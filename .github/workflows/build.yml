@@ -1,7 +1,7 @@
 name: Build
 
 on:
-  - workflow_dispatch
+  workflow_dispatch:
     inputs:
       commit_ref:
         description: 'commit ref to build'
