@@ -114,9 +114,15 @@ int thrd_join(thrd_t thr, int *res) {
 
 	if (!wrapped) {
 		printf("[threads_macos] joined thread returned NULL (not our wrapper?!)\n");
-		*res = 0;
+
+        if (res) {
+			*res = 0;
+        }
 	} else {
-		*res = wrapped->res;
+        if (res) {
+			*res = wrapped->res;
+        }
+
 		free(wrapped);
 	}
 
