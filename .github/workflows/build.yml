@@ -1,0 +1,13 @@
+name: Build
+
+jobs:
+    build:
+        runs-on: [ubuntu-22.04, macos-14]
+        steps:
+        - uses: actions/checkout@v4
+        - name: fetch-libs
+          run: ./fetch-libs.sh
+        - name: build-libs
+          run: ./build-libs.sh
+        - name: build
+          run: ./build.sh
