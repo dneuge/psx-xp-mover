@@ -1,22 +1,22 @@
 name: Build
 
-on: workflow_dispatch
-
-inputs:
-  commit_ref:
-    description: 'commit ref to build'
-    required: true
+on:
+  - workflow_dispatch
+    inputs:
+      commit_ref:
+        description: 'commit ref to build'
+        required: true
 
 jobs:
-    build:
-        runs-on: macos-15
-        steps:
-        - uses: actions/checkout@v4
-          with:
-            ref: ${{ github.event.inputs.commit_ref }}
-        - name: fetch-libs
-          run: ./fetch-libs.sh
-        - name: build-libs
-          run: ./build-libs.sh
-        - name: build
-          run: ./build.sh
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.commit_ref }}
+      - name: fetch-libs
+        run: ./fetch-libs.sh
+      - name: build-libs
+        run: ./build-libs.sh
+      - name: build
+        run: ./build.sh
