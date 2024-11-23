@@ -6,6 +6,8 @@ on:
       commit_ref:
         description: 'commit ref to build'
         required: true
+      ci_ref:
+        description: 'CI system reference'
 
 jobs:
   build:
