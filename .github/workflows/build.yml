@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: inputs-echo
         shell: bash
-        run: |-
+        run: |
         echo '#### JOB PARAMETERS - START'
         echo 'commit_ref=${{ github.event.inputs.commit_ref }}'
         echo 'ci_ref=${{ github.event.inputs.ci_ref }}'
