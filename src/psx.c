@@ -231,9 +231,18 @@ static int run_connection_loop(void *ref) {
     psx_client_t *client = ref;
     printf("[XPMover] connection thread started\n");
 
+    bool first_connection = true;
     while (!client->should_shutdown) {
         // TODO: the mutex is currently not needed as hostname/port are constant; remove?
-        thrd_sleep(&(struct timespec){.tv_sec=RECONNECT_DELAY_SECONDS}, NULL);
+
+        if (first_connection) {
+            first_connection = false;
+        } else {
+            if (thrd_sleep(&(struct timespec){.tv_sec=RECONNECT_DELAY_SECONDS}, NULL)) {
+                printf("[XPMover] sleep before reconnect failed or was interrupted; aborting\n");
+                break;
+            }
+        }
 
         int sd = do_connect(client);
         if (sd == -1) {
