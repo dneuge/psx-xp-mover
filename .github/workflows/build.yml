@@ -13,6 +13,13 @@ jobs:
   build:
     runs-on: macos-15
     steps:
+      - name: inputs-echo
+        shell: bash
+        run: |-
+        echo '#### JOB PARAMETERS - START'
+        echo 'commit_ref=${{ github.event.inputs.commit_ref }}'
+        echo 'ci_ref=${{ github.event.inputs.ci_ref }}'
+        echo '#### JOB PARAMETERS - END'
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.commit_ref }}
