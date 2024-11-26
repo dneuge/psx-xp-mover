@@ -114,7 +114,7 @@ ELSEIF(WIN32)
 ENDIF()
 
 IF(NOT APPLE)
-	TARGET_LINK_OPTIONS(xpmover PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export_symbols.map)
+    TARGET_LINK_OPTIONS(xpmover PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export_symbols.map)
 ENDIF()
 
 IF("${XPLANE_TARGET}" EQUAL "12.04")
