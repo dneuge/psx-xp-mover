@@ -17,6 +17,9 @@ on:
         required: true
       ci_ref:
         description: 'CI system reference'
+      restore_cache:
+        description: 'Is this run allowed to load cached files?'
+        type: boolean
 
 jobs:
   build:
@@ -31,10 +34,19 @@ jobs:
           echo 'xplane_target=${{ github.event.inputs.xplane_target }}'
           echo 'commit_ref=${{ github.event.inputs.commit_ref }}'
           echo 'ci_ref=${{ github.event.inputs.ci_ref }}'
+          echo 'restore_cache=${{ github.event.inputs.restore_cache }}'
           echo '#### JOB PARAMETERS - END'
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.commit_ref }}
+      - name: restore cache
+        id: cache-restore
+        if: "${{ github.event.inputs.restore_cache }}"
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            lib/_downloads
+          key: lib_downloads
       - name: fetch-libs
         run: ./fetch-libs.sh
       - name: build-libs
@@ -47,3 +59,10 @@ jobs:
           name: release
           path: release
           retention-days: 1
+      - name: save cache
+        id: cache-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            lib/_downloads
+          key: lib_downloads
