@@ -3,6 +3,15 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
+      build_runner:
+        description: 'Where should the build be run? (GitHub "runs-on" image/OS definition)'
+        required: true
+      build_target:
+        description: 'platform to target'
+        required: true
+      xplane_target:
+        description: 'X-Plane version to target'
+        required: true
       commit_ref:
         description: 'commit ref to build'
         required: true
@@ -11,12 +20,15 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: ${{ github.event.inputs.build_runner }}
     steps:
       - name: inputs-echo
         shell: bash
         run: |
           echo '#### JOB PARAMETERS - START'
+          echo 'build_runner=${{ github.event.inputs.build_runner }}'
+          echo 'build_target=${{ github.event.inputs.build_target }}'
+          echo 'xplane_target=${{ github.event.inputs.xplane_target }}'
           echo 'commit_ref=${{ github.event.inputs.commit_ref }}'
           echo 'ci_ref=${{ github.event.inputs.ci_ref }}'
           echo '#### JOB PARAMETERS - END'
@@ -26,9 +38,9 @@ jobs:
       - name: fetch-libs
         run: ./fetch-libs.sh
       - name: build-libs
-        run: ./build-libs.sh
+        run: ./build-libs.sh ${{ github.event.inputs.build_target }} ${{ github.event.inputs.xplane_target }}
       - name: build
-        run: ./build.sh
+        run: ./build.sh ${{ github.event.inputs.build_target }} ${{ github.event.inputs.xplane_target }}
       - name: archive
         uses: actions/upload-artifact@v4
         with:
