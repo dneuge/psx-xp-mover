@@ -46,7 +46,7 @@ jobs:
         with:
           path: |
             lib/_downloads
-          key: lib_downloads
+          key: lib_downloads-${{ hashFiles('fetch-libs.sh') }}
       - name: fetch-libs
         run: ./fetch-libs.sh
       - name: build-libs
@@ -65,4 +65,4 @@ jobs:
         with:
           path: |
             lib/_downloads
-          key: lib_downloads
+          key: lib_downloads-${{ hashFiles('fetch-libs.sh') }}
