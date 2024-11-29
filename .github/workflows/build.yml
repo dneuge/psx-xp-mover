@@ -41,7 +41,7 @@ jobs:
           ref: ${{ github.event.inputs.commit_ref }}
       - name: restore cache
         id: cache-restore
-        if: "${{ github.event.inputs.restore_cache }}"
+        if: "${{ github.event.inputs.restore_cache == 'true' }}"
         uses: actions/cache/restore@v4
         with:
           path: |
