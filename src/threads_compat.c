@@ -2,7 +2,7 @@
 
 #ifdef TARGET_MACOS
 
-#include "threads_macos.c"
+#include "threads_macos_compat.c"
 
 #else
 #error "Missing C11 threads compatibility wrapper for target OS!"
