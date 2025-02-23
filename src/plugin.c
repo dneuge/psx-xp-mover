@@ -81,7 +81,11 @@ typedef int xpint_t;
 typedef float xpfloat_t;
 typedef double xpdouble_t;
 
+static XPLMDataRef dataref_override_oxygen = NULL;
+static XPLMDataRef dataref_override_pressurization = NULL;
 static XPLMDataRef dataref_override_planepath = NULL;
+static XPLMDataRef dataref_cabin_altitude = NULL;
+static XPLMDataRef dataref_pilot_felt_altitude = NULL;
 static XPLMDataRef dataref_psi_hdg = NULL;
 static XPLMDataRef dataref_phi_roll = NULL;
 static XPLMDataRef dataref_theta_pitch = NULL;
@@ -436,7 +440,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         bool success = true;
 
         // first find all datarefs we need from X-Plane, we will not be able to run if we don't have those
+        success &= find_dataref(&dataref_override_oxygen, "sim/operation/override/override_oxygen_system");
+        success &= find_dataref(&dataref_override_pressurization, "sim/operation/override/override_pressurization");
         success &= find_dataref(&dataref_override_planepath, "sim/operation/override/override_planepath");
+        success &= find_dataref(&dataref_cabin_altitude, "sim/cockpit/pressure/cabin_altitude_actual_ft");
+        success &= find_dataref(&dataref_pilot_felt_altitude, "sim/cockpit2/oxygen/indicators/pilot_felt_altitude_ft");
         success &= find_dataref(&dataref_psi_hdg, "sim/flightmodel/position/psi");
         success &= find_dataref(&dataref_phi_roll, "sim/flightmodel/position/phi");
         success &= find_dataref(&dataref_theta_pitch, "sim/flightmodel/position/theta");
@@ -683,6 +691,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         double _ignore_local_z = 0.0;
         XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, adjusted_elevation_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
     }
+
+    XPLMSetDatai(dataref_override_oxygen, 1);
+    XPLMSetDatai(dataref_override_pressurization, 1);
+    XPLMSetDataf(dataref_cabin_altitude, 0.0f);
+    XPLMSetDataf(dataref_pilot_felt_altitude, 0.0f);
 
     XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
     XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
