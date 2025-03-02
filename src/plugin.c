@@ -74,6 +74,8 @@ static XPLMDataRef dataref_calculated_ground_speed = NULL;
 const char dataref_name_publish_ground_speed[] = "xpmover/publish/ground_speed_calculated";
 static XPLMDataRef dataref_publish_ground_speed = NULL;
 
+const char dataref_name_publish_motion_vector[] = "xpmover/publish/motion_vector";
+static XPLMDataRef dataref_publish_motion_vector = NULL;
 
 #define DATAREF_WRITABLE (1)
 
@@ -92,6 +94,9 @@ static XPLMDataRef dataref_theta_pitch = NULL;
 static XPLMDataRef dataref_local_x = NULL;
 static XPLMDataRef dataref_local_y = NULL;
 static XPLMDataRef dataref_local_z = NULL;
+static XPLMDataRef dataref_local_vx = NULL;
+static XPLMDataRef dataref_local_vy = NULL;
+static XPLMDataRef dataref_local_vz = NULL;
 static XPLMDataRef dataref_ground_speed = NULL;
 static XPLMDataRef dataref_ground_speed2 = NULL;
 static bool datarefs_initialized = false;
@@ -120,9 +125,12 @@ static int num_raw_elevation_blending_fractions = 0;
 #define MAX_REALTIME_GROUND_SPEED (700)
 #define MAX_GROUND_SPEED (PSX_MAX_TIME_ACCELERATION_FACTOR * MAX_REALTIME_GROUND_SPEED)
 
-#define MILLISECONDS_PER_HOUR (3600000)
+#define MILLISECONDS_PER_SECOND (1000)
+#define MILLISECONDS_PER_HOUR (3600 * MILLISECONDS_PER_SECOND)
+
 static double calculated_ground_speed = 0.0;
 static bool publish_ground_speed = true;
+static bool publish_motion_vector = true;
 
 static xpint_t disable_planepath[] = {1};
 
@@ -451,6 +459,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= find_dataref(&dataref_local_x, "sim/flightmodel/position/local_x");
         success &= find_dataref(&dataref_local_y, "sim/flightmodel/position/local_y");
         success &= find_dataref(&dataref_local_z, "sim/flightmodel/position/local_z");
+        success &= find_dataref(&dataref_local_vx, "sim/flightmodel/position/local_vx");
+        success &= find_dataref(&dataref_local_vy, "sim/flightmodel/position/local_vy");
+        success &= find_dataref(&dataref_local_vz, "sim/flightmodel/position/local_vz");
         success &= find_dataref(&dataref_ground_speed, "sim/flightmodel/position/groundspeed");
         success &= find_dataref(&dataref_ground_speed2, "sim/flightmodel2/position/groundspeed");
 
@@ -477,6 +488,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_elevation_blending_fraction, dataref_name_elevation_blending_fraction, &elevation_blending_fraction);
         success &= expose_double_as_dataref(&dataref_calculated_ground_speed, dataref_name_calculated_ground_speed, &calculated_ground_speed);
         success &= expose_bool_as_dataref(&dataref_publish_ground_speed, dataref_name_publish_ground_speed, &publish_ground_speed);
+        success &= expose_bool_as_dataref(&dataref_publish_motion_vector, dataref_name_publish_motion_vector, &publish_motion_vector);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
@@ -579,6 +591,29 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         double ground_speed_meters = nauticalmiles2meters(calculated_ground_speed);
         XPLMSetDatad(dataref_ground_speed, ground_speed_meters);
         XPLMSetDatad(dataref_ground_speed2, ground_speed_meters);
+    }
+
+    // calculate motion vector (used by XP to e.g. calculate read-only ground speed dataref)
+    if (publish_motion_vector && ground_speed_reference_boost_frame) {
+        // note that this calculation does not include terrain blending, thus it is different to later local_* variables
+        double current_x = 0.0;
+        double current_y = 0.0;
+        double current_z = 0.0;
+        double reference_x = 0.0;
+        double reference_y = 0.0;
+        double reference_z = 0.0;
+        XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters, &current_x, &current_y, &current_z);
+        XPLMWorldToLocal(ground_speed_reference_boost_frame->flight_deck_latitude, ground_speed_reference_boost_frame->flight_deck_longitude, ground_speed_reference_boost_frame->elevation_msl_meters, &reference_x, &reference_y, &reference_z);
+
+        double reference_age_seconds = (double) ground_speed_reference_boost_frame_age_millis / MILLISECONDS_PER_SECOND;
+        double inverse_reference_age_seconds = 1.0 / reference_age_seconds;
+        double vector_x = (current_x - reference_x) * inverse_reference_age_seconds;
+        double vector_y = (current_y - reference_y) * inverse_reference_age_seconds;
+        double vector_z = (current_z - reference_z) * inverse_reference_age_seconds;
+
+        XPLMSetDataf(dataref_local_vx, (float)vector_x);
+        XPLMSetDataf(dataref_local_vy, (float)vector_y);
+        XPLMSetDataf(dataref_local_vz, (float)vector_z);
     }
 
     // calculate low speed fraction for elevation blending
