@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#define METERS_PER_NAUTICAL_MILE (1852)
+#define NAUTICAL_MILES_PER_METER (1.0 / METERS_PER_NAUTICAL_MILE)
+
 void* zmalloc(size_t size);
 
 bool parse_long(long *dest, char *s, int length);

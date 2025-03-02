@@ -123,10 +123,13 @@ static int num_raw_elevation_blending_fractions = 0;
 #define PSX_MAX_FPS (77)
 #define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
 #define MAX_REALTIME_GROUND_SPEED (700)
-#define MAX_GROUND_SPEED (PSX_MAX_TIME_ACCELERATION_FACTOR * MAX_REALTIME_GROUND_SPEED)
+#define MAX_ACCELERATED_GROUND_SPEED (PSX_MAX_TIME_ACCELERATION_FACTOR * MAX_REALTIME_GROUND_SPEED)
 
 #define MILLISECONDS_PER_SECOND (1000)
 #define MILLISECONDS_PER_HOUR (3600 * MILLISECONDS_PER_SECOND)
+
+#define MAX_PUBLISHED_GROUND_SPEED 750 /* knots */
+#define MAX_PUBLISHED_GROUND_SPEED_METERS_PER_SECOND ((double) MAX_PUBLISHED_GROUND_SPEED * METERS_PER_NAUTICAL_MILE / 3600)
 
 static double calculated_ground_speed = 0.0;
 static bool publish_ground_speed = true;
@@ -579,16 +582,22 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         printf("[XPMover] distance: %lf meters (%lf nm)\n", diff_distance_meters, meters2nauticalmiles(diff_distance_meters));
         */
     }
+
     record_boost_frame(&boost_frame_copy);
 
     if (calculated_ground_speed < 0.0) {
         calculated_ground_speed = 0.0;
-    } else if (calculated_ground_speed > MAX_GROUND_SPEED) {
-        calculated_ground_speed = MAX_GROUND_SPEED;
+    } else if (calculated_ground_speed > MAX_ACCELERATED_GROUND_SPEED) {
+        calculated_ground_speed = MAX_ACCELERATED_GROUND_SPEED;
     }
 
     if (publish_ground_speed) {
         double ground_speed_meters = nauticalmiles2meters(calculated_ground_speed);
+
+        if (ground_speed_meters > MAX_PUBLISHED_GROUND_SPEED_METERS_PER_SECOND) {
+            ground_speed_meters = MAX_PUBLISHED_GROUND_SPEED_METERS_PER_SECOND;
+        }
+
         XPLMSetDatad(dataref_ground_speed, ground_speed_meters);
         XPLMSetDatad(dataref_ground_speed2, ground_speed_meters);
     }
@@ -610,6 +619,15 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         double vector_x = (current_x - reference_x) * inverse_reference_age_seconds;
         double vector_y = (current_y - reference_y) * inverse_reference_age_seconds;
         double vector_z = (current_z - reference_z) * inverse_reference_age_seconds;
+
+        // limit maximum speed seen by XP by scaling down excessive vectors
+        if (calculated_ground_speed >= MAX_PUBLISHED_GROUND_SPEED) {
+            double original_vector_length = sqrt(vector_x * vector_x + vector_z * vector_z);
+            double scale_factor = MAX_PUBLISHED_GROUND_SPEED_METERS_PER_SECOND / original_vector_length;
+            vector_x *= scale_factor;
+            vector_y *= scale_factor;
+            vector_z *= scale_factor;
+        }
 
         XPLMSetDataf(dataref_local_vx, (float)vector_x);
         XPLMSetDataf(dataref_local_vy, (float)vector_y);
