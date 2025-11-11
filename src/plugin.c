@@ -77,6 +77,18 @@ static XPLMDataRef dataref_publish_ground_speed = NULL;
 const char dataref_name_publish_motion_vector[] = "xpmover/publish/motion_vector";
 static XPLMDataRef dataref_publish_motion_vector = NULL;
 
+const char dataref_name_psx_latitude[] = "xpmover/psx/flightdeck_latitude";
+static XPLMDataRef dataref_psx_latitude = NULL;
+
+const char dataref_name_psx_longitude[] = "xpmover/psx/flightdeck_longitude";
+static XPLMDataRef dataref_psx_longitude = NULL;
+
+const char dataref_name_psx_elevation[] = "xpmover/psx/elevation_msl_m";
+static XPLMDataRef dataref_psx_elevation = NULL;
+
+const char dataref_name_suspend_injection[] = "xpmover/suspend_injection";
+static XPLMDataRef dataref_suspend_injection = NULL;
+
 #define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
@@ -119,6 +131,14 @@ static double elevation_blending_fraction = 0.0; // blends between XP and PSX el
 static double raw_elevation_blending_fractions[MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS] = {0}; // raw blending fractions (not smoothed yet)
 static int next_raw_elevation_blending_fractions_index = 0;
 static int num_raw_elevation_blending_fractions = 0;
+
+// PSX lat/lon is just a copy of last received value while injection PSX->XP is active (i.e. not very useful).
+// However, while injection is suspended these variables hold the position calculated back from XP to PSX coordinates,
+// which is useful to reposition PSX if the aircraft was to be moved within XP.
+static double psx_latitude = NAN;
+static double psx_longitude = NAN;
+static double psx_elevation = NAN;
+static bool suspend_injection = false;
 
 #define PSX_MAX_FPS (77)
 #define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
@@ -492,6 +512,10 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_calculated_ground_speed, dataref_name_calculated_ground_speed, &calculated_ground_speed);
         success &= expose_bool_as_dataref(&dataref_publish_ground_speed, dataref_name_publish_ground_speed, &publish_ground_speed);
         success &= expose_bool_as_dataref(&dataref_publish_motion_vector, dataref_name_publish_motion_vector, &publish_motion_vector);
+        success &= expose_double_as_dataref(&dataref_psx_latitude, dataref_name_psx_latitude, &psx_latitude);
+        success &= expose_double_as_dataref(&dataref_psx_longitude, dataref_name_psx_longitude, &psx_longitude);
+        success &= expose_double_as_dataref(&dataref_psx_elevation, dataref_name_psx_elevation, &psx_elevation);
+        success &= expose_bool_as_dataref(&dataref_suspend_injection, dataref_name_suspend_injection, &suspend_injection);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
@@ -598,8 +622,10 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             ground_speed_meters = MAX_PUBLISHED_GROUND_SPEED_METERS_PER_SECOND;
         }
 
-        XPLMSetDatad(dataref_ground_speed, ground_speed_meters);
-        XPLMSetDatad(dataref_ground_speed2, ground_speed_meters);
+        if (!suspend_injection) {
+            XPLMSetDatad(dataref_ground_speed, ground_speed_meters);
+            XPLMSetDatad(dataref_ground_speed2, ground_speed_meters);
+        }
     }
 
     // calculate motion vector (used by XP to e.g. calculate read-only ground speed dataref)
@@ -629,9 +655,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             vector_z *= scale_factor;
         }
 
-        XPLMSetDataf(dataref_local_vx, (float)vector_x);
-        XPLMSetDataf(dataref_local_vy, (float)vector_y);
-        XPLMSetDataf(dataref_local_vz, (float)vector_z);
+        if (!suspend_injection) {
+            XPLMSetDataf(dataref_local_vx, (float)vector_x);
+            XPLMSetDataf(dataref_local_vy, (float)vector_y);
+            XPLMSetDataf(dataref_local_vz, (float)vector_z);
+        }
     }
 
     // calculate low speed fraction for elevation blending
@@ -725,6 +753,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     }
 
     // adjust elevation as needed for terrain blending/pinning
+    double elevation_blending_offset = 0.0;
     if ((elevation_blending_fraction > 0.0) && !isnan(terrain_elevation_meters)) {
         double adjusted_elevation_meters;
         if (elevation_blending_fraction == 1.0) {
@@ -733,7 +762,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         } else {
             // blend between XP and PSX
             double elevation_difference = boost_frame_copy.elevation_msl_meters - terrain_elevation_meters;
-            adjusted_elevation_meters = boost_frame_copy.elevation_msl_meters - (elevation_blending_fraction * elevation_difference);
+            elevation_blending_offset = -(elevation_blending_fraction * elevation_difference);
+            adjusted_elevation_meters = boost_frame_copy.elevation_msl_meters + elevation_blending_offset;
         }
 
         // apply model offset
@@ -750,13 +780,33 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     XPLMSetDataf(dataref_cabin_altitude, 0.0f);
     XPLMSetDataf(dataref_pilot_felt_altitude, 0.0f);
 
-    XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
-    XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
-    XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
+    if (!suspend_injection) {
+        // apply PSX => XP
+        XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
+        XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
+        XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
 
-    XPLMSetDatad(dataref_local_x, local_x);
-    XPLMSetDatad(dataref_local_y, local_y);
-    XPLMSetDatad(dataref_local_z, local_z);
+        XPLMSetDatad(dataref_local_x, local_x);
+        XPLMSetDatad(dataref_local_y, local_y);
+        XPLMSetDatad(dataref_local_z, local_z);
+
+        psx_latitude = boost_frame_copy.flight_deck_latitude;
+        psx_longitude = boost_frame_copy.flight_deck_longitude;
+        psx_elevation = boost_frame_copy.elevation_msl_meters;
+    } else {
+        // calculate XP to PSX coordinates
+        local_x = XPLMGetDatad(dataref_local_x);
+        local_y = XPLMGetDatad(dataref_local_y);
+        local_z = XPLMGetDatad(dataref_local_z);
+
+        // see forward calculation above for explanation
+        local_x += sin(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
+        local_z -= cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
+
+        double elevation = NAN;
+        XPLMLocalToWorld(local_x, local_y, local_z, &psx_latitude, &psx_longitude, &elevation);
+        psx_elevation = elevation - elevation_blending_offset - model_height_offset_meters;
+    }
 
     return CALL_ON_NEXT_FRAME;
 }
