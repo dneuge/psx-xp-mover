@@ -20,6 +20,10 @@ on:
       restore_cache:
         description: 'Is this run allowed to load cached files?'
         type: boolean
+      save_cache:
+        description: 'Is this run allowed to save files to cache?'
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -61,6 +65,7 @@ jobs:
           retention-days: 1
       - name: save cache
         id: cache-save
+        if: "${{ github.event.inputs.save_cache == 'true' }}"
         uses: actions/cache/save@v4
         with:
           path: |
