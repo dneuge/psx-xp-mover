@@ -111,6 +111,7 @@ static XPLMDataRef dataref_local_vy = NULL;
 static XPLMDataRef dataref_local_vz = NULL;
 static XPLMDataRef dataref_ground_speed = NULL;
 static XPLMDataRef dataref_ground_speed2 = NULL;
+static XPLMDataRef dataref_ground_contact = NULL;
 static bool datarefs_initialized = false;
 
 static XPLMProbeRef probe = NULL;
@@ -487,6 +488,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= find_dataref(&dataref_local_vz, "sim/flightmodel/position/local_vz");
         success &= find_dataref(&dataref_ground_speed, "sim/flightmodel/position/groundspeed");
         success &= find_dataref(&dataref_ground_speed2, "sim/flightmodel2/position/groundspeed");
+        success &= find_dataref(&dataref_ground_contact, "sim/flightmodel/failures/onground_any");
 
         if (success) {
             datarefs_initialized = true;
@@ -789,6 +791,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         XPLMSetDatad(dataref_local_x, local_x);
         XPLMSetDatad(dataref_local_y, local_y);
         XPLMSetDatad(dataref_local_z, local_z);
+
+        XPLMSetDatai(dataref_ground_contact, (ground_contact_fraction >= 1.0) ? 1 : 0);
 
         psx_latitude = boost_frame_copy.flight_deck_latitude;
         psx_longitude = boost_frame_copy.flight_deck_longitude;
