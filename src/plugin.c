@@ -916,6 +916,11 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_elevation_blending_fraction);
     unregister_dataref(&dataref_calculated_ground_speed);
     unregister_dataref(&dataref_publish_ground_speed);
+    unregister_dataref(&dataref_publish_motion_vector);
+    unregister_dataref(&dataref_psx_latitude);
+    unregister_dataref(&dataref_psx_longitude);
+    unregister_dataref(&dataref_psx_elevation);
+    unregister_dataref(&dataref_suspend_injection);
 
     if (probe) {
         XPLMDestroyProbe(probe);
