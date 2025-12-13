@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <XPLMDataAccess.h>
 #include <XPLMGraphics.h>
@@ -10,8 +11,11 @@
 #include <XPLMPlugin.h>
 #include <XPLMScenery.h>
 
+#include "interpolation.h"
 #include "psx.h"
 #include "utils.h"
+
+// TODO: track full timestamp of last received boost frame and reset interpolator if at least half a second passed
 
 // forward-declaration to roll back partial initialization when XPluginEnable() fails
 PLUGIN_API void XPluginDisable();
@@ -89,6 +93,21 @@ static XPLMDataRef dataref_psx_elevation = NULL;
 const char dataref_name_suspend_injection[] = "xpmover/suspend_injection";
 static XPLMDataRef dataref_suspend_injection = NULL;
 
+const char dataref_name_interpolate[] = "xpmover/interpolate";
+static XPLMDataRef dataref_interpolate = NULL;
+
+const char dataref_name_interpolation_buffer_millis[] = "xpmover/interpolation_buffer_ms";
+static XPLMDataRef dataref_interpolation_buffer_millis = NULL;
+
+const char dataref_name_interpolation_compensate_time_difference[] = "xpmover/interpolation_compensate_time_diff";
+static XPLMDataRef dataref_interpolation_compensate_time_difference = NULL;
+
+const char dataref_name_average_psx_time_difference[] = "xpmover/avg_psx_time_diff_ms";
+static XPLMDataRef dataref_average_psx_time_difference = NULL;
+
+const char dataref_name_interpolation_time_source[] = "xpmover/interpolation_time_source";
+static XPLMDataRef dataref_interpolation_time_source = NULL;
+
 #define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
@@ -112,6 +131,8 @@ static XPLMDataRef dataref_local_vz = NULL;
 static XPLMDataRef dataref_ground_speed = NULL;
 static XPLMDataRef dataref_ground_speed2 = NULL;
 static XPLMDataRef dataref_ground_contact = NULL;
+static XPLMDataRef dataref_total_running_time_sec = NULL;
+
 static bool datarefs_initialized = false;
 
 static XPLMProbeRef probe = NULL;
@@ -140,12 +161,14 @@ static double psx_latitude = NAN;
 static double psx_longitude = NAN;
 static double psx_elevation = NAN;
 static bool suspend_injection = false;
+static bool interpolate = true;
 
 #define PSX_MAX_FPS (77)
 #define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
 #define MAX_REALTIME_GROUND_SPEED (700)
 #define MAX_ACCELERATED_GROUND_SPEED (PSX_MAX_TIME_ACCELERATION_FACTOR * MAX_REALTIME_GROUND_SPEED)
 
+#define NANOS_PER_MILLI (1000000)
 #define MILLISECONDS_PER_SECOND (1000)
 #define MILLISECONDS_PER_HOUR (3600 * MILLISECONDS_PER_SECOND)
 
@@ -170,6 +193,32 @@ static psx_boost_frame_t previous_boost_frames[MAX_NUM_PREVIOUS_BOOST_FRAMES] = 
 static int previous_boost_frame_index = 0;
 static int num_previous_boost_frames = 0;
 
+// TODO: monitor actual framerate/number of "underruns" and adjust interpolation buffer time dynamically
+static double interpolation_buffer_millis = 2.7 * 13.06; // 13.06ms = typical average interval
+
+static interpolator_t *interpolator_flight_deck_latitude = NULL;
+static interpolator_t *interpolator_flight_deck_longitude = NULL;
+static interpolator_t *interpolator_psx_elevation_msl_meters = NULL;
+static interpolator_t *interpolator_heading_true_degrees = NULL;
+static interpolator_t *interpolator_pitch_degrees = NULL;
+static interpolator_t *interpolator_bank_degrees = NULL;
+
+#define MAX_NUM_TIME_DIFFERENCE_RECORDS (10 * PSX_MAX_FPS)
+static int diff_receive_timestamp_millis[MAX_NUM_TIME_DIFFERENCE_RECORDS] = {0};
+static int num_diff_receive_timestamp_millis = 0;
+static int next_diff_receive_timestamp_millis = 0;
+static double average_psx_time_difference = 0.0; // positive: local clock is ahead of PSX; negative: local clock is behind PSX
+static bool interpolation_compensate_time_difference = true;
+
+#define INTERPOLATION_TIME_SOURCE_RTC (1)
+#define INTERPOLATION_TIME_SOURCE_SIM_RUN (2) /* TODO: check if this makes sense to keep; not correctly synced yet, no improvement seen over RTC; just increases complexity? */
+#define INTERPOLATION_TIME_SOURCE_DEFAULT INTERPOLATION_TIME_SOURCE_RTC
+static int interpolation_time_source = INTERPOLATION_TIME_SOURCE_DEFAULT;
+
+// FIXME: rename average_psx_time_difference which is not PSX but XP time diff in case sim running time is used (only rename if time source switch is being kept)
+#define INIT_CYCLES_TO_UPDATE_SIM_TIME_DIFF (500)
+int cycles_to_update_sim_time_diff = INIT_CYCLES_TO_UPDATE_SIM_TIME_DIFF;
+
 #define INIT_CYCLES_TO_OVERRIDE_PLANE_PATH (10);
 static int cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
 
@@ -177,7 +226,94 @@ static int cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
 #define DATAREF_EDITOR_MSG_ADD_DATAREF (0x01000000)
 static XPLMPluginID dataref_editor_plugin_id = XPLM_NO_PLUGIN_ID;
 
+static double get_millis_rtc() {
+    struct timespec ts = {0};
+    if (!timespec_get(&ts, TIME_UTC)) {
+        return NAN;
+    }
+
+    double millis = (double) ts.tv_nsec / NANOS_PER_MILLI;
+    if (millis < 0 || millis >= 1000) {
+        return NAN;
+    }
+
+    return millis;
+}
+
+static double get_millis_sim_run() {
+    if (!datarefs_initialized) {
+        return NAN;
+    }
+
+    float sim_runtime_secs = XPLMGetDataf(dataref_total_running_time_sec);
+    double integral_part = NAN;
+    double fractional_part = modf((double) sim_runtime_secs, &integral_part);
+    double millis = round(fractional_part * 1000);
+    if (millis < 0) {
+        return 0;
+    } else if (millis >= 1000) {
+        return 999.999999;
+    } else {
+        return millis;
+    }
+}
+
+static double get_millis() {
+    if (interpolation_time_source == INTERPOLATION_TIME_SOURCE_RTC) {
+        return get_millis_rtc();
+    }
+
+    if (interpolation_time_source == INTERPOLATION_TIME_SOURCE_SIM_RUN) {
+        return get_millis_sim_run();
+    }
+
+    // fix invalid value
+    interpolation_time_source = INTERPOLATION_TIME_SOURCE_DEFAULT;
+    return get_millis();
+}
+
 static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
+    // calculate time difference between PSX instance and local clock to be able to interpolate
+    double local_receive_timestamp_millis = NAN;
+    double avg_time_diff_millis = NAN;
+    if (interpolation_time_source == INTERPOLATION_TIME_SOURCE_RTC) {
+        local_receive_timestamp_millis = get_millis_rtc();
+        avg_time_diff_millis = NAN;
+        if (!isnan(local_receive_timestamp_millis)) {
+            int local_receive_timestamp_millis_int = (int) round(local_receive_timestamp_millis);
+            if (local_receive_timestamp_millis_int < 0) {
+                local_receive_timestamp_millis_int = 0;
+            } else if (local_receive_timestamp_millis_int >= 1000){
+                local_receive_timestamp_millis_int = 999;
+            }
+
+            if (local_receive_timestamp_millis >= 0) {
+                int diff_millis = local_receive_timestamp_millis_int - new_boost_frame->timestamp_millis_part;
+                if (diff_millis <= -500) {
+                    diff_millis += 1000;
+                }
+                //printf("clock diff: %5d\n", diff_millis); // DEBUG
+
+                diff_receive_timestamp_millis[next_diff_receive_timestamp_millis] = diff_millis;
+                if (num_diff_receive_timestamp_millis < MAX_NUM_TIME_DIFFERENCE_RECORDS) {
+                    num_diff_receive_timestamp_millis++;
+                }
+                next_diff_receive_timestamp_millis = (next_diff_receive_timestamp_millis + 1) % MAX_NUM_TIME_DIFFERENCE_RECORDS;
+
+                // TODO: optimize calculation of sum? (could be "cached", only last value needs to be reversed)
+                long sum = 0;
+                for (int i=0; i<num_diff_receive_timestamp_millis; i++) {
+                    sum += diff_receive_timestamp_millis[i];
+                }
+
+                avg_time_diff_millis = (double) sum / num_diff_receive_timestamp_millis; // TODO: expose as dataref for debugging?
+                //printf("avg time diff: %8.6f\n", avg_time_diff_millis); // DEBUG
+            }
+        }
+
+        //printf("boost frame received local %.2f / remote %d\n", local_receive_timestamp_millis, new_boost_frame->timestamp_millis_part); // DEBUG
+    }
+
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
         printf("[XPMover] receive callback failed to lock boost frame mutex\n");
         return;
@@ -185,6 +321,17 @@ static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
 
     boost_frame = *new_boost_frame;
     boost_frame_applied = false;
+
+    if (interpolation_time_source == INTERPOLATION_TIME_SOURCE_RTC) {
+        average_psx_time_difference = isnan(avg_time_diff_millis) ? 0.0 : avg_time_diff_millis;
+    }
+
+    interpolator_add_point(interpolator_flight_deck_latitude, boost_frame.timestamp_millis_part, boost_frame.flight_deck_latitude);
+    interpolator_add_point(interpolator_flight_deck_longitude, boost_frame.timestamp_millis_part, boost_frame.flight_deck_longitude);
+    interpolator_add_point(interpolator_psx_elevation_msl_meters, boost_frame.timestamp_millis_part, boost_frame.elevation_msl_meters);
+    interpolator_add_point(interpolator_heading_true_degrees, boost_frame.timestamp_millis_part, boost_frame.heading_true_degrees);
+    interpolator_add_point(interpolator_pitch_degrees, boost_frame.timestamp_millis_part, boost_frame.pitch_degrees);
+    interpolator_add_point(interpolator_bank_degrees, boost_frame.timestamp_millis_part, boost_frame.bank_degrees);
 
     mtx_unlock(&boost_frame_mutex);
 }
@@ -462,11 +609,17 @@ static double get_average_elevation_blending_fraction() {
     return average;
 }
 
-static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon)
-{
+static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void *inRefcon) {
     // https://developer.x-plane.com/article/movingtheplane/
 
     psx_boost_frame_t boost_frame_copy = {0};
+    double interpolation_timestamp_millis_part = 0;
+    double interpolated_flight_deck_latitude = NAN;
+    double interpolated_flight_deck_longitude = NAN;
+    double interpolated_psx_elevation_msl_meters = NAN;
+    double interpolated_heading_true_degrees = NAN;
+    double interpolated_pitch_degrees = NAN;
+    double interpolated_bank_degrees = NAN;
 
     if (!datarefs_initialized) {
         bool success = true;
@@ -489,6 +642,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= find_dataref(&dataref_ground_speed, "sim/flightmodel/position/groundspeed");
         success &= find_dataref(&dataref_ground_speed2, "sim/flightmodel2/position/groundspeed");
         success &= find_dataref(&dataref_ground_contact, "sim/flightmodel/failures/onground_any");
+        success &= find_dataref(&dataref_total_running_time_sec, "sim/time/total_running_time_sec");
 
         if (success) {
             datarefs_initialized = true;
@@ -518,6 +672,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_psx_longitude, dataref_name_psx_longitude, &psx_longitude);
         success &= expose_double_as_dataref(&dataref_psx_elevation, dataref_name_psx_elevation, &psx_elevation);
         success &= expose_bool_as_dataref(&dataref_suspend_injection, dataref_name_suspend_injection, &suspend_injection);
+        success &= expose_bool_as_dataref(&dataref_interpolate, dataref_name_interpolate, &interpolate);
+        success &= expose_double_as_dataref(&dataref_interpolation_buffer_millis, dataref_name_interpolation_buffer_millis, &interpolation_buffer_millis);
+        success &= expose_double_as_dataref(&dataref_average_psx_time_difference, dataref_name_average_psx_time_difference, &average_psx_time_difference);
+        success &= expose_bool_as_dataref(&dataref_interpolation_compensate_time_difference, dataref_name_interpolation_compensate_time_difference, &interpolation_compensate_time_difference);
+        success &= expose_int_as_dataref(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             printf("[XPMover] failed to register datarefs\n");
@@ -536,6 +695,20 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     if (cycles_to_override_plane_path >= 0) {
         cycles_to_override_plane_path--;
     }
+
+    if (interpolation_time_source == INTERPOLATION_TIME_SOURCE_SIM_RUN) {
+        if (cycles_to_update_sim_time_diff > 0) {
+            cycles_to_update_sim_time_diff--;
+        } else {
+            cycles_to_update_sim_time_diff = INIT_CYCLES_TO_UPDATE_SIM_TIME_DIFF;
+            double millis_sim_run = get_millis_sim_run();
+            double millis_rtc = get_millis_rtc();
+            double diff_millis = millis_rtc - millis_sim_run;
+            //printf("[XPMover] time difference sim total running seconds: XP=%.6f, RTC=%.6f => diff=%.6f\n", millis_sim_run, millis_rtc, diff_millis); // DEBUG
+            average_psx_time_difference = isnan(diff_millis) ? 0.0 : diff_millis;
+        }
+    }
+
 
     // eventually expire terrain elevation
     // Terrain elevation is being queried by probing general scenery which is mentioned as being an expensive operation
@@ -561,10 +734,43 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         return CALL_ON_NEXT_FRAME;
     }
 
-    bool is_new = !boost_frame_applied || has_debug_override;
-    if (is_new) {
-        boost_frame_copy = boost_frame;
-        boost_frame_applied = true;
+    bool is_new_boost_frame = !boost_frame_applied;
+    bool is_new = is_new_boost_frame || has_debug_override;
+    boost_frame_copy = boost_frame;
+    boost_frame_applied = true;
+
+    if (interpolate && !has_debug_override) {
+        double now_millis_part = get_millis();
+        if (!isnan(now_millis_part)) {
+            // timestamp to query interpolator for must be in PSX time (hence using estimated timestamp correction)
+            // and it must look back to a point in time where we have two interpolation points available
+            // (slightly more than 1 PSX frame)
+            interpolation_timestamp_millis_part = now_millis_part - interpolation_buffer_millis;
+            if (interpolation_compensate_time_difference) {
+                interpolation_timestamp_millis_part -= average_psx_time_difference;
+            }
+            //printf("[XPMover] now_millis_part=%.2f, avg time diff %.2f, buffer %.2f\n", now_millis_part, average_psx_time_difference, interpolation_buffer_millis);
+            while (interpolation_timestamp_millis_part < 0) {
+                interpolation_timestamp_millis_part += 1000;
+            }
+            while (interpolation_timestamp_millis_part >= 1000) {
+                interpolation_timestamp_millis_part -= 1000;
+            }
+            if (interpolation_timestamp_millis_part < 0) {
+                interpolation_timestamp_millis_part = 0;
+            } else if (interpolation_timestamp_millis_part >= 1000) {
+                interpolation_timestamp_millis_part = 999.999999;
+            }
+
+            interpolated_flight_deck_latitude = interpolator_calculate(interpolator_flight_deck_latitude, interpolation_timestamp_millis_part);
+            interpolated_flight_deck_longitude = interpolator_calculate(interpolator_flight_deck_longitude, interpolation_timestamp_millis_part);
+            interpolated_psx_elevation_msl_meters = interpolator_calculate(interpolator_psx_elevation_msl_meters, interpolation_timestamp_millis_part);
+            interpolated_heading_true_degrees = interpolator_calculate(interpolator_heading_true_degrees, interpolation_timestamp_millis_part);
+            interpolated_pitch_degrees = interpolator_calculate(interpolator_pitch_degrees, interpolation_timestamp_millis_part);
+            interpolated_bank_degrees = interpolator_calculate(interpolator_bank_degrees, interpolation_timestamp_millis_part);
+
+            is_new = true;
+        }
     }
 
     mtx_unlock(&boost_frame_mutex);
@@ -609,7 +815,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         */
     }
 
-    record_boost_frame(&boost_frame_copy);
+    if (is_new_boost_frame) {
+        record_boost_frame(&boost_frame_copy);
+    }
 
     if (calculated_ground_speed < 0.0) {
         calculated_ground_speed = 0.0;
@@ -720,19 +928,28 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     }
 
     // smooth elevation blending fraction
-    record_raw_elevation_blending_fraction(raw_elevation_blending_fraction);
+    if (is_new_boost_frame) {
+        record_raw_elevation_blending_fraction(raw_elevation_blending_fraction);
+    }
     elevation_blending_fraction = get_average_elevation_blending_fraction();
+
+    double flight_deck_latitude = isnan(interpolated_flight_deck_latitude) ? boost_frame_copy.flight_deck_latitude : interpolated_flight_deck_latitude;
+    double flight_deck_longitude = isnan(interpolated_flight_deck_longitude) ? boost_frame_copy.flight_deck_longitude : interpolated_flight_deck_longitude;
+    double psx_elevation_msl_meters = isnan(interpolated_psx_elevation_msl_meters) ? boost_frame_copy.elevation_msl_meters : interpolated_psx_elevation_msl_meters;
+    double heading_true_degrees = isnan(interpolated_heading_true_degrees) ? boost_frame_copy.heading_true_degrees : interpolated_heading_true_degrees;
+    double pitch_degrees = isnan(interpolated_pitch_degrees) ? boost_frame_copy.pitch_degrees : interpolated_pitch_degrees;
+    double bank_degrees = isnan(interpolated_bank_degrees) ? boost_frame_copy.bank_degrees : interpolated_bank_degrees;
 
     // transform PSX flight deck lat/lon and aircraft center elevation to X-Plane OpenGL coordinates (meters)
     double local_x = 0.0;
     double local_y = 0.0;
     double local_z = 0.0;
-    XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, boost_frame_copy.elevation_msl_meters + model_height_offset_meters, &local_x, &local_y, &local_z);
+    XPLMWorldToLocal(flight_deck_latitude, flight_deck_longitude, psx_elevation_msl_meters + model_height_offset_meters, &local_x, &local_y, &local_z);
 
     // center of rotation is offset between PSX and XP model
     // local OpenGL coordinates luckily are defined in meters, so we can correct the position by simple trigonometry
-    local_x -= sin(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
-    local_z += cos(deg2rad(boost_frame_copy.heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
+    local_x -= sin(deg2rad(heading_true_degrees)) * model_length_offset_meters; // neg west / pos east
+    local_z += cos(deg2rad(heading_true_degrees)) * model_length_offset_meters; // neg north / pos south
 
     // probe terrain at current position, if needed
     bool need_xplane_elevation = (elevation_blending_fraction != 0.0);
@@ -763,9 +980,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             adjusted_elevation_meters = terrain_elevation_meters;
         } else {
             // blend between XP and PSX
-            double elevation_difference = boost_frame_copy.elevation_msl_meters - terrain_elevation_meters;
+            double elevation_difference = psx_elevation_msl_meters - terrain_elevation_meters;
             elevation_blending_offset = -(elevation_blending_fraction * elevation_difference);
-            adjusted_elevation_meters = boost_frame_copy.elevation_msl_meters + elevation_blending_offset;
+            adjusted_elevation_meters = psx_elevation_msl_meters + elevation_blending_offset;
         }
 
         // apply model offset
@@ -774,7 +991,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         // recalculate local_y (elevation); keep local_x/local_z (lateral position)
         double _ignore_local_x = 0.0;
         double _ignore_local_z = 0.0;
-        XPLMWorldToLocal(boost_frame_copy.flight_deck_latitude, boost_frame_copy.flight_deck_longitude, adjusted_elevation_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
+        XPLMWorldToLocal(flight_deck_latitude, flight_deck_longitude, adjusted_elevation_meters, &_ignore_local_x, &local_y, &_ignore_local_z);
     }
 
     XPLMSetDatai(dataref_override_oxygen, 1);
@@ -784,9 +1001,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     if (!suspend_injection) {
         // apply PSX => XP
-        XPLMSetDataf(dataref_psi_hdg, boost_frame_copy.heading_true_degrees);
-        XPLMSetDataf(dataref_phi_roll, boost_frame_copy.bank_degrees);
-        XPLMSetDataf(dataref_theta_pitch, boost_frame_copy.pitch_degrees);
+        XPLMSetDataf(dataref_psi_hdg, (float) heading_true_degrees);
+        XPLMSetDataf(dataref_phi_roll, (float) bank_degrees);
+        XPLMSetDataf(dataref_theta_pitch, (float) pitch_degrees);
 
         XPLMSetDatad(dataref_local_x, local_x);
         XPLMSetDatad(dataref_local_y, local_y);
@@ -794,10 +1011,13 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
         XPLMSetDatai(dataref_ground_contact, (ground_contact_fraction >= 1.0) ? 1 : 0);
 
+        // expose actual PSX-received values as datarefs (not interpolated)
         psx_latitude = boost_frame_copy.flight_deck_latitude;
         psx_longitude = boost_frame_copy.flight_deck_longitude;
         psx_elevation = boost_frame_copy.elevation_msl_meters;
-    } else {
+    } else if (is_new_boost_frame) {
+        // NOTE: no need to rerun on every single X-Plane flight loop frame, once per PSX frame is enough
+
         // calculate XP to PSX coordinates
         local_x = XPLMGetDatad(dataref_local_x);
         local_y = XPLMGetDatad(dataref_local_y);
@@ -835,7 +1055,9 @@ PLUGIN_API int XPluginEnable() {
         .refcon = NULL,
     };
 
-    if (datarefs_initialized || psx_client || probe || probe_info) {
+    if (datarefs_initialized || psx_client || probe || probe_info
+        || interpolator_flight_deck_latitude || interpolator_flight_deck_longitude || interpolator_psx_elevation_msl_meters
+        || interpolator_heading_true_degrees || interpolator_pitch_degrees || interpolator_bank_degrees) {
         printf("[XPMover] internal variables are already set, another instance appears to still be running; aborting startup\n");
         return 0;
     }
@@ -848,6 +1070,18 @@ PLUGIN_API int XPluginEnable() {
         return 0;
     }
     has_boost_frame_mutex = true;
+
+    interpolator_flight_deck_latitude = create_interpolator();
+    interpolator_flight_deck_longitude = create_interpolator();
+    interpolator_psx_elevation_msl_meters = create_interpolator();
+    interpolator_heading_true_degrees = create_interpolator();
+    interpolator_pitch_degrees = create_interpolator();
+    interpolator_bank_degrees = create_interpolator();
+    if (!(interpolator_flight_deck_latitude && interpolator_flight_deck_longitude && interpolator_psx_elevation_msl_meters
+        && interpolator_heading_true_degrees && interpolator_pitch_degrees && interpolator_bank_degrees)) {
+        printf("[XPMover] failed to create interpolators; aborting startup\n");
+        goto rollback;
+    }
 
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
@@ -921,6 +1155,11 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_psx_longitude);
     unregister_dataref(&dataref_psx_elevation);
     unregister_dataref(&dataref_suspend_injection);
+    unregister_dataref(&dataref_interpolate);
+    unregister_dataref(&dataref_interpolation_buffer_millis);
+    unregister_dataref(&dataref_average_psx_time_difference);
+    unregister_dataref(&dataref_interpolation_compensate_time_difference);
+    unregister_dataref(&dataref_interpolation_time_source);
 
     if (probe) {
         XPLMDestroyProbe(probe);
@@ -936,6 +1175,19 @@ PLUGIN_API void XPluginDisable() {
         mtx_destroy(&boost_frame_mutex);
         has_boost_frame_mutex = false;
     }
+
+    destroy_interpolator(interpolator_flight_deck_latitude);
+    interpolator_flight_deck_latitude = NULL;
+    destroy_interpolator(interpolator_flight_deck_longitude);
+    interpolator_flight_deck_longitude = NULL;
+    destroy_interpolator(interpolator_psx_elevation_msl_meters);
+    interpolator_psx_elevation_msl_meters = NULL;
+    destroy_interpolator(interpolator_heading_true_degrees);
+    interpolator_heading_true_degrees = NULL;
+    destroy_interpolator(interpolator_bank_degrees);
+    interpolator_bank_degrees = NULL;
+    destroy_interpolator(interpolator_pitch_degrees);
+    interpolator_pitch_degrees = NULL;
 }
 
 PLUGIN_API void XPluginStop() {

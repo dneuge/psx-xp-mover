@@ -37,6 +37,7 @@ ENDIF()
 
 SET(XPMOVER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/plugin.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/interpolation.c
     ${COMMON_SOURCES}
 )
 
