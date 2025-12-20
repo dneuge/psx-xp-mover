@@ -45,6 +45,9 @@ static XPLMDataRef dataref_model_height_offset = NULL;
 const char dataref_name_debug_spin_hdg[] = "xpmover/debug/spin_hdg";
 static XPLMDataRef dataref_debug_spin_hdg = NULL;
 
+const char dataref_name_always_update_elevation_info[] = "xpmover/terrain/always_update_elevation_info";
+static XPLMDataRef dataref_always_update_elevation_info = NULL;
+
 const char dataref_name_terrain_elevation_meters[] = "xpmover/terrain/elevation_msl_meters";
 static XPLMDataRef dataref_terrain_elevation_meters = NULL;
 
@@ -162,6 +165,8 @@ static double psx_longitude = NAN;
 static double psx_elevation = NAN;
 static bool suspend_injection = false;
 static bool interpolate = true;
+
+static bool always_update_elevation_info = false;
 
 #define PSX_MAX_FPS (77)
 #define PSX_MAX_TIME_ACCELERATION_FACTOR (64)
@@ -656,6 +661,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_model_height_offset, dataref_name_model_height_offset, &model_height_offset_meters);
         success &= expose_double_as_dataref(&dataref_model_length_offset, dataref_name_model_length_offset, &model_length_offset_meters);
         success &= expose_double_as_dataref(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
+        success &= expose_bool_as_dataref(&dataref_always_update_elevation_info, dataref_name_always_update_elevation_info, &always_update_elevation_info);
         success &= expose_double_as_dataref(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
         success &= expose_int_as_dataref(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
         success &= expose_int_as_dataref(&dataref_ground_contact_cycles, dataref_name_ground_contact_cycles, &ground_contact_cycles);
@@ -953,7 +959,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     // probe terrain at current position, if needed
     bool need_xplane_elevation = (elevation_blending_fraction != 0.0);
-    if (need_xplane_elevation) {
+    if (need_xplane_elevation || always_update_elevation_info) {
         XPLMProbeResult probe_result = XPLMProbeTerrainXYZ(probe, (float) local_x, (float) local_y, (float) local_z, probe_info);
         if (probe_result == xplm_ProbeHitTerrain) {
             // if the probed object moves it cannot be terrain but is probably some scenery object, ignore it
@@ -1139,6 +1145,7 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_model_height_offset);
     unregister_dataref(&dataref_model_length_offset);
     unregister_dataref(&dataref_debug_spin_hdg);
+    unregister_dataref(&dataref_always_update_elevation_info);
     unregister_dataref(&dataref_terrain_elevation_meters);
     unregister_dataref(&dataref_terrain_elevation_remaining_cycles);
     unregister_dataref(&dataref_ground_contact_cycles);
