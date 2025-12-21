@@ -54,6 +54,9 @@ static XPLMDataRef dataref_terrain_elevation_meters = NULL;
 const char dataref_name_terrain_elevation_remaining_cycles[] = "xpmover/terrain/remaining_cycles";
 static XPLMDataRef dataref_terrain_elevation_remaining_cycles = NULL;
 
+const char dataref_name_suspend_terrain_blending[] = "xpmover/terrain/blending/suspend";
+static XPLMDataRef dataref_suspend_terrain_blending = NULL;
+
 const char dataref_name_ground_contact_cycles[] = "xpmover/terrain/blending/ground_contact_cycles";
 static XPLMDataRef dataref_ground_contact_cycles = NULL;
 
@@ -156,6 +159,7 @@ static double elevation_blending_fraction = 0.0; // blends between XP and PSX el
 static double raw_elevation_blending_fractions[MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS] = {0}; // raw blending fractions (not smoothed yet)
 static int next_raw_elevation_blending_fractions_index = 0;
 static int num_raw_elevation_blending_fractions = 0;
+static bool suspend_terrain_blending = false;
 
 // PSX lat/lon is just a copy of last received value while injection PSX->XP is active (i.e. not very useful).
 // However, while injection is suspended these variables hold the position calculated back from XP to PSX coordinates,
@@ -664,6 +668,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_bool_as_dataref(&dataref_always_update_elevation_info, dataref_name_always_update_elevation_info, &always_update_elevation_info);
         success &= expose_double_as_dataref(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
         success &= expose_int_as_dataref(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
+        success &= expose_bool_as_dataref(&dataref_suspend_terrain_blending, dataref_name_suspend_terrain_blending, &suspend_terrain_blending);
         success &= expose_int_as_dataref(&dataref_ground_contact_cycles, dataref_name_ground_contact_cycles, &ground_contact_cycles);
         success &= expose_double_as_dataref(&dataref_ground_contact_fraction, dataref_name_ground_contact_fraction, &ground_contact_fraction);
         success &= expose_double_as_dataref(&dataref_firm_ground_speed, dataref_name_firm_ground_speed, &firm_ground_speed);
@@ -914,7 +919,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     // calculate fraction of elevation blending
     double raw_elevation_blending_fraction = NAN;
-    if (low_speed_fraction == 0.0 && ground_contact_fraction == 0.0) {
+    if ((low_speed_fraction == 0.0 && ground_contact_fraction == 0.0) || suspend_terrain_blending) {
         // fully transitioned to flight, apply unadjusted PSX altitude
         raw_elevation_blending_fraction = 0.0;
     } else if (low_speed_fraction == 1.0 && ground_contact_fraction == 1.0) {
@@ -1148,6 +1153,7 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_always_update_elevation_info);
     unregister_dataref(&dataref_terrain_elevation_meters);
     unregister_dataref(&dataref_terrain_elevation_remaining_cycles);
+    unregister_dataref(&dataref_suspend_terrain_blending);
     unregister_dataref(&dataref_ground_contact_cycles);
     unregister_dataref(&dataref_ground_contact_fraction);
     unregister_dataref(&dataref_firm_ground_speed);
