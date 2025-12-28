@@ -203,7 +203,8 @@ static int previous_boost_frame_index = 0;
 static int num_previous_boost_frames = 0;
 
 // TODO: monitor actual framerate/number of "underruns" and adjust interpolation buffer time dynamically
-static double interpolation_buffer_millis = 2.7 * 13.06; // 13.06ms = typical average interval
+//static double interpolation_buffer_millis = 2.7 * 13.06; // 13.06ms = typical average interval
+static double interpolation_buffer_millis = 50.0; // best reliability with minor lag
 
 static interpolator_t *interpolator_flight_deck_latitude = NULL;
 static interpolator_t *interpolator_flight_deck_longitude = NULL;
