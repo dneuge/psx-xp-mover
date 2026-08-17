@@ -9,6 +9,12 @@ This is by no means a proper "scenery generator". The main goal is to have some 
 on virtual cockpit integration. If you want proper integration with X-Plane, an actual "scenery generator" should be
 used instead.
 
+Official repositories are hosted on [Codeberg](https://codeberg.org/dneuge/psx-xp-mover) and
+[GitHub](https://github.com/dneuge/psx-xp-mover). Both locations are kept in sync and can be used to submit
+pull requests but issues are only tracked on [Codeberg](https://codeberg.org/dneuge/psx-xp-mover/issues) to gather them
+in a single place. Please note that [all contributions](CONTRIBUTING.md) incl. issue reports are subject to a
+restrictive [AI Usage Policy](AI_USAGE_POLICY.md).
+
 ## License
 
 All sources and original files of this project are provided under [MIT license](LICENSE.md), unless declared otherwise
@@ -28,8 +34,7 @@ Unless you can comply with the licenses of this project you obviously are not pe
 set. Although it may not be required by those licenses, you are additionally asked to make your AI model publicly
 available under an open license and for free, to play fair and contribute back to the open community you take from.
 
-AI tools are not permitted to be used for contributions to this project. The main reason is that, as of time of writing,
-no tool/model offers traceability nor can today's AI models understand and reason about what they are actually doing.
-Apart from potential copyright/license violations the quality of AI output is doubtful and generally requires more
-effort to be reviewed and cleaned/fixed than actually contributing original work. Contributors will be asked to confirm
-and permanently record compliance with these guidelines.
+For contributions to this project, **AI tools and services may only be used as detailed in the
+[Contribution Guidelines](CONTRIBUTING.md) and separate [AI Usage Policy](AI_USAGE_POLICY.md)**. Contributors will be
+asked to confirm and permanently record compliance with that policy. Violations may lead to immediate and permanent
+removal from this project, depending on severity.
