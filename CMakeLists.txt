@@ -24,6 +24,7 @@ ENDIF()
 
 SET(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/psx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/threads_compat.c
 )

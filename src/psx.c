@@ -4,13 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#include <errno.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
+#include "network.h"
 #include "utils.h"
 
 #define BOOST_FIELD_SEPARATOR ';'
@@ -139,75 +134,6 @@ bool psx_recalculate_boost_frame(psx_boost_frame_t *frame) {
     return true;
 }
 
-static bool resolve_address(psx_client_t *client) {
-    struct addrinfo hints = {0};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    struct addrinfo *res = NULL;
-    int err = getaddrinfo(client->hostname, NULL, &hints, &res);
-    if (err) {
-        printf("[XPMover] address lookup failed: %s\n", gai_strerror(err));
-        return false;
-    }
-
-    if (!res) {
-        printf("[XPMover] address lookup did not yield any results\n");
-        return false;
-    }
-
-    if (client->resolved_addresses) {
-        freeaddrinfo(client->resolved_addresses);
-    }
-    client->resolved_addresses = res;
-
-    return true;
-}
-
-static int do_connect(psx_client_t *client) {
-    printf("[XPMover] connecting to %s:%d\n", client->hostname, client->port);
-
-    resolve_address(client);
-    if (!client->resolved_addresses) {
-        printf("[XPMover] address not resolved, unable to connect\n");
-        return -1;
-    }
-
-    int sd = -1;
-
-    for (struct addrinfo *resolved_address = client->resolved_addresses; resolved_address; resolved_address = resolved_address->ai_next) {
-        if (resolved_address->ai_socktype != SOCK_STREAM) {
-            continue;
-        }
-
-        int ip_version = 0;
-        if (resolved_address->ai_family == AF_INET) {
-            ((struct sockaddr_in*)resolved_address->ai_addr)->sin_port = ntohs(client->port);
-            ip_version = 4;
-        } else if (resolved_address->ai_family == AF_INET6) {
-            ((struct sockaddr_in6*)resolved_address->ai_addr)->sin6_port = ntohs(client->port);
-            ip_version = 6;
-        } else {
-            continue;
-        }
-
-        printf("[XPMover] connecting via IPv%d...\n", ip_version);
-        sd = socket(resolved_address->ai_family, resolved_address->ai_socktype, resolved_address->ai_protocol);
-        if (sd == -1) {
-            printf("[XPMover] failed to create socket: %d %s\n", errno, strerror(errno));
-        } else {
-            if (connect(sd, resolved_address->ai_addr, resolved_address->ai_addrlen) == 0) {
-                return sd;
-            }
-
-            printf("[XPMover] socket failed to connect: %d %s\n", errno, strerror(errno));
-            close(sd);
-        }
-    }
-
-    return -1;
-}
-
 static bool on_line_received(psx_client_t *client, char *line) {
     psx_boost_frame_t boost_frame = {0};
     if (!psx_parse_boost_frame(&boost_frame, line)) {
@@ -244,8 +170,8 @@ static int run_connection_loop(void *ref) {
             }
         }
 
-        int sd = do_connect(client);
-        if (sd == -1) {
+        socket_t sd;
+        if (!connect_tcp_client(&sd, client->hostname, client->port, &client->resolved_addresses)) {
             printf("[XPMover] connection failed\n");
             continue;
         }
@@ -257,7 +183,7 @@ static int run_connection_loop(void *ref) {
         char *past_line_buffer = line_buffer + LINE_BUFFER_SIZE;
         bool success = true;
         while (!client->should_shutdown) {
-            int num_received = read(sd, recv_buffer, RECV_BUFFER_SIZE);
+            ssize_t num_received = read_network(sd, recv_buffer, RECV_BUFFER_SIZE);
             if (num_received <= 0) {
                 break;
             }
@@ -291,8 +217,8 @@ static int run_connection_loop(void *ref) {
         }
 
         printf("[XPMover] closing connection\n");
-        write(sd, exit_line, strlen(exit_line));
-        close(sd);
+        write_network_string(sd, (char*) exit_line);
+        close_network_socket(sd);
     }
 
     printf("[XPMover] connection thread terminated\n");
@@ -383,10 +309,7 @@ bool destroy_psx_client(psx_client_t *client) {
     free(client->hostname);
     client->hostname = NULL;
 
-    if (client->resolved_addresses) {
-        freeaddrinfo(client->resolved_addresses);
-        client->resolved_addresses = NULL;
-    }
+    free_addresses(&client->resolved_addresses);
 
     free(client);
 

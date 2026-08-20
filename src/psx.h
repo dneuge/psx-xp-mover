@@ -5,7 +5,7 @@
 
 #include "threads_compat.h"
 
-#include <netdb.h>
+#include "network.h"
 
 typedef struct {
     // received over network
@@ -44,7 +44,7 @@ typedef struct {
 
     thrd_t thread;
     bool has_thread;
-    struct addrinfo *resolved_addresses;
+    resolved_addresses_t resolved_addresses;
 
     bool should_shutdown;
 } psx_client_t;

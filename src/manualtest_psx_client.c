@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "psx.h"
@@ -56,6 +57,11 @@ static void on_receive(psx_boost_frame_t *frame) {
 int main(int argc, char **argv) {
     if (argc < 2 || argc > 3) {
         print_help();
+        return 1;
+    }
+
+    if (!initialize_os_network_apis()) {
+        printf("Failed to initialize OS network APIs.");
         return 1;
     }
 
