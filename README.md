@@ -55,11 +55,11 @@ Some examples of what the plugin doesn't (and can't) do:
 
 - set external lights in XP \
   => you may be limited to daylight unless you control e.g. landing lights on your own
-- control flight surfaces, gear or flaps in XP\ 
+- control flight surfaces, gear or flaps in XP \
   => external view will look weird (aircraft stuck in some half-initialized state)
 - control any part of the cockpit (incl. yoke and thrust lever) or forward any interaction with the cockpit to PSX \
   => internal view will look "stuck"
-- X-Plane terrain elevation is not provided back into PSX
+- X-Plane terrain elevation is not provided back into PSX \
   => terrain mismatch will be more evident in PSX than when such feedback would be provided
 
 ## License
