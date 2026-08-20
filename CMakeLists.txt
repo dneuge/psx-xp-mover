@@ -20,7 +20,21 @@ IF(CMAKE_VERSION VERSION_LESS "3.25")
     ENDIF()
 ENDIF()
 
-#FIND_PACKAGE(OpenGL REQUIRED)
+MESSAGE(STATUS "Detected C compiler: ${CMAKE_C_COMPILER_ID}")
+MESSAGE(STATUS "Detected C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
+
+IF(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    MESSAGE(WARNING "It seems that you are trying to build using GCC which would potentially result in badly licensed binaries spreading GPL3 over network connections and voids integrated license information. Use LLVM/Clang instead.")
+    IF(I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS)
+        MESSAGE(WARNING "!!! GCC HAS BEEN ACCEPTED BY USER; BUILD MUST ONLY BE USED FOR LOCAL VALIDATION, BUILD RESULTS MUST NOT BE SHARED !!!")
+    ELSE()
+        MESSAGE(FATAL_ERROR "Aborting build to protect license conformity.")
+        RETURN()
+    ENDIF()
+ELSEIF(NOT ((CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_C_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")))
+    MESSAGE(FATAL_ERROR "Clang was not detected which voids integrated license information. Use LLVM/CLang instead.")
+    RETURN()
+ENDIF()
 
 SET(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/psx.c

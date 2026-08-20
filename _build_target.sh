@@ -34,8 +34,6 @@ if [[ "$#" -ge 1 ]]; then
 fi
 export BUILD_TARGET
 
-CMAKE_TOOLCHAIN_FILE=""
-
 XPLANE_TARGET="12.04"
 if [[ "$#" -ge 2 ]]; then
 	XPLANE_TARGET="$2"
@@ -56,14 +54,11 @@ elif [[ "${XPLANE_TARGET}" =~ $re_xp12_version ]]; then
 	XPLANE_TARGET_MAJOR=12
 fi
 
-BUILD_TARGET_DYNLIB_EXT="so"
-if [[ "${BUILD_TARGET}" == "windows" ]]; then
-	BUILD_TARGET_DYNLIB_EXT="dll"
-	if [[ "${HOST_OS_NAME} ${HOST_OS_VERSION}" == "Ubuntu jammy" ]]; then
-		CMAKE_TOOLCHAIN_FILE="${root_dir}/TC-ubuntu22.04-windows-x86_64-mingw.cmake"
-	else
-		die "Missing CMake toolchain for ${HOST_OS_NAME} ${HOST_OS_VERSION} (target: ${BUILD_TARGET})"
-	fi
+CMAKE_TOOLCHAIN_FILE=""
+if [[ "${CMAKE_TOOLCHAIN_FILE:-}" != "" ]]; then
+	echo "Using user-provided CMake toolchain: ${CMAKE_TOOLCHAIN_FILE}"
+elif [[ "${BUILD_TARGET}" == "linux" ]]; then
+	CMAKE_TOOLCHAIN_FILE="${root_dir}/TC-generic_linux-linux-x86_64-clang.cmake"
 elif [[ "${BUILD_TARGET}" != "linux" ]] && [[ "${BUILD_TARGET}" != "macos" ]]; then
 	die "Unknown build target: ${BUILD_TARGET}"
 fi
@@ -80,14 +75,18 @@ else
 fi
 export XPLANE_PLATFORM_ID
 
-#if [[ "${BUILD_TARGET}" == "linux" ]]; then
-#	GCC_CPP_COMPILER="g++"
-#elif [[ "${BUILD_TARGET}" == "windows" ]]; then
-#	GCC_CPP_COMPILER="x86_64-w64-mingw32-g++"
-#else
-#	die "GCC C++ compiler variable not configured for ${BUILD_TARGET}"
-#fi
-#export GCC_CPP_COMPILER
+override_distribution_restrictions=0
+if [[ "${I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS:-False}" == "1" || "${I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS:-False}" == "True" ]]; then
+  override_distribution_restrictions=1
+fi
+
+CPP_COMPILER_ARGS=""
+CPP_COMPILER="clang++"
+if [[ "${BUILD_TARGET}" == "macos" ]]; then
+	CPP_COMPILER_ARGS="-std=c++11"
+fi
+export CPP_COMPILER
+export CPP_COMPILER_ARGS
 
 if [[ "${HOST_OS_TYPE}" == "MacOS" ]]; then
 	NUM_CPUS=$(sysctl -n hw.ncpu)
