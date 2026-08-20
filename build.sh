@@ -29,8 +29,19 @@ mkdir -p "${release_dir}"
 ## BUILD
 cd "${build_dir}"
 
-cmake -D XPLANE_TARGET="${XPLANE_TARGET}" .. || die "CMake failed"
-make -j$num_jobs || die "make failed"
+cmake -D XPLANE_TARGET="${XPLANE_TARGET}" -D I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS="${I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS:-False}" .. || die "CMake failed"
+if [[ "${BUILD_SYSTEM}" == "vs" ]]; then
+    MSYS_NO_PATHCONV=1 msbuild.exe xpmover.vcxproj /t:Build /p:Configuration=Release || die "msbuild xpmover failed"
+    MSYS_NO_PATHCONV=1 msbuild.exe manualtest-psx-client.vcxproj /t:Build /p:Configuration=Release || die "msbuild manualtest-psx-client failed"
+    MSYS_NO_PATHCONV=1 msbuild.exe manualtest-psx-parse.vcxproj /t:Build /p:Configuration=Release || die "msbuild manualtest-psx-parse failed"
+else
+    make -j$num_jobs || die "make failed"
+fi
+
+## MSVC: change directory
+if [[ "$BUILD_SYSTEM" == "vs" ]]; then
+    cd Release
+fi
 
 ## COPY
 mkdir -p "${script_dir}/release/xpmover/${XPLANE_PLATFORM_ID}" || die "Failed to create release directory ${XPLANE_PLATFORM_ID}"

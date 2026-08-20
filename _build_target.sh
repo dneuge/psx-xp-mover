@@ -19,14 +19,48 @@ elif [[ "${HOST_OS_TYPE}" == "Darwin" ]]; then
 	HOST_OS_TYPE="MacOS"
 	HOST_OS_NAME="MacOS"
 	HOST_OS_VERSION="$(sw_vers -productVersion)"
+elif [[ "${HOST_OS_TYPE}" =~ ^MSYS_NT-.* ]]; then
+	HOST_OS_VERSION="${HOST_OS_TYPE/MSYS_/}"
+	HOST_OS_TYPE="Windows"
+	HOST_OS_NAME="Windows"
+elif [[ "${HOST_OS_TYPE}" =~ ^MINGW64_NT-.* ]]; then
+	HOST_OS_VERSION="${HOST_OS_TYPE/MINGW64_/}"
+	HOST_OS_TYPE="Windows"
+	HOST_OS_NAME="Windows"
 fi
 if [[ "${HOST_OS_NAME}" == "" ]]; then
 	HOST_OS_NAME="unknown host system"
+	echo "!!! Unknown host system: HOST_OS_NAME=${HOST_OS_NAME} / HOST_OS_TYPE=${HOST_OS_TYPE}"
 fi
 export HOST_OS_TYPE
 export HOST_OS_ARCH
 export HOST_OS_NAME
 export HOST_OS_VERSION
+
+BUILD_SYSTEM="std"
+vs_product_id="unknown"
+vs_product_version="unknown"
+vs_root_dir="/c/vs_not_found"
+if [[ "$HOST_OS_TYPE" == "Windows" ]]; then
+	vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+	if [[ ! -e "$vswhere" ]]; then
+		echo "Visual Studio does not appear to be installed, assuming standard build system"
+	else
+		vs_product_id=$("$vswhere" -latest -property productId)
+		vs_product_version=$("$vswhere" -latest -property catalog_productLineVersion)
+
+		echo "Found Visual Studio: ${vs_product_id} ${vs_product_version}"
+		BUILD_SYSTEM="vs"
+
+		vs_root_dir="/c/Program Files (x86)/Microsoft Visual Studio/${vs_product_version}"
+		if [[ ! -d "${vs_root_dir}" ]]; then
+			vs_root_dir="/c/Program Files/Microsoft Visual Studio/${vs_product_version}"
+		fi
+		[[ -d "${vs_root_dir}" ]] || die "Visual Studio root directory could not be found"
+		echo "Visual Studio root: ${vs_root_dir}"
+	fi
+fi
+export BUILD_SYSTEM
 
 BUILD_TARGET="$(tr '[:upper:]' '[:lower:]' <<<$HOST_OS_TYPE)"
 if [[ "$#" -ge 1 ]]; then
@@ -59,6 +93,19 @@ if [[ "${CMAKE_TOOLCHAIN_FILE:-}" != "" ]]; then
 	echo "Using user-provided CMake toolchain: ${CMAKE_TOOLCHAIN_FILE}"
 elif [[ "${BUILD_TARGET}" == "linux" ]]; then
 	CMAKE_TOOLCHAIN_FILE="${root_dir}/TC-generic_linux-linux-x86_64-clang.cmake"
+elif [[ "${BUILD_TARGET}" == "windows" ]]; then
+	if [[ "${HOST_OS_NAME} ${HOST_OS_VERSION}" == "Ubuntu jammy" ]]; then
+		CMAKE_TOOLCHAIN_FILE="${root_dir}/TC-ubuntu22.04-windows-x86_64-mingw.cmake"
+	elif [[ "${HOST_OS_NAME}" == "Windows" ]]; then
+		CMAKE_TOOLCHAIN_FILE="${root_dir}/TC-windows_github-windows-x86_64-msvc_clang.cmake"
+	else
+		die "Missing CMake toolchain for ${HOST_OS_NAME} ${HOST_OS_VERSION} (target: ${BUILD_TARGET})"
+	fi
+fi
+
+BUILD_TARGET_DYNLIB_EXT="so"
+if [[ "${BUILD_TARGET}" == "windows" ]]; then
+	BUILD_TARGET_DYNLIB_EXT="dll"
 elif [[ "${BUILD_TARGET}" != "linux" ]] && [[ "${BUILD_TARGET}" != "macos" ]]; then
 	die "Unknown build target: ${BUILD_TARGET}"
 fi
@@ -82,11 +129,54 @@ fi
 
 CPP_COMPILER_ARGS=""
 CPP_COMPILER="clang++"
-if [[ "${BUILD_TARGET}" == "macos" ]]; then
+if [[ "${BUILD_SYSTEM}" == "vs" ]]; then
+	if [[ "${vs_product_id}" == "Microsoft.VisualStudio.Product.Community" ]]; then
+		if [[ $override_distribution_restrictions -eq 1 ]]; then
+			echo "!!! ENABLING COMPILATION WITH VS COMMUNITY EDITION WHICH VOIDS LICENSE CONFORMITY; DO NOT DISTRIBUTE BUILD RESULTS !!!"
+		else
+			die "Detected Visual Studio Community edition which unfortunately cannot be used for distribution builds due to dependencies using licenses which are not OSI-approved."
+		fi
+  elif [[ "${vs_product_id}" != "Microsoft.VisualStudio.Product.Enterprise" && "${vs_product_id}" != "Microsoft.VisualStudio.Product.Professional" ]]; then
+		if [[ $override_distribution_restrictions -ne 1 ]]; then
+      die "Blocking compilation because an unknown edition of Visual Studio is being used, so license conformity cannot be ensured: ${vs_product_id}"
+    fi
+	fi
+
+	CPP_COMPILER="${vs_root_dir}/BuildTools/VC/Tools/Llvm/x64/bin/clang-cl.exe"
+	if [[ ! -e "${CPP_COMPILER}" ]]; then
+		CPP_COMPILER="${vs_root_dir}/Enterprise/VC/Tools/Llvm/x64/bin/clang-cl.exe"
+	fi
+	[[ -e "${CPP_COMPILER}" ]] || die "Visual Studio Clang could not be found"
+
+	# For options see:
+	#   https://github.com/MicrosoftDocs/cpp-docs/blob/main/docs/build/reference/md-mt-ld-use-run-time-library.md
+	#
+	# /MD selects a runtime library suitable for creating DLLs which is necessary because by default MT_StaticRelease
+	# will be selected which is incompatible to linking the main plugin. This can be checked via
+	#   "c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx86\x64\dumpbin.exe" /DIRECTIVES ...
+	# which must not list
+	#   /FAILIFMISMATCH:RuntimeLibrary=MT_StaticRelease
+	CPP_COMPILER_ARGS="//MD"
+elif [[ "${BUILD_TARGET}" == "macos" ]]; then
 	CPP_COMPILER_ARGS="-std=c++11"
+elif [[ "${BUILD_TARGET}" == "windows" ]]; then
+  if [[ $override_distribution_restrictions -eq 1 ]]; then
+    echo "!!! ENABLING MINGW COMPILATION WHICH VOIDS LICENSE CONFORMITY; DO NOT DISTRIBUTE BUILD RESULTS !!!"
+    CPP_COMPILER="x86_64-w64-mingw32-g++"
+  fi
 fi
 export CPP_COMPILER
 export CPP_COMPILER_ARGS
+
+if [[ "${BUILD_SYSTEM}" == "vs" ]]; then
+	if [[ ! "$(which msbuild.exe)" ]]; then
+		echo "MSBuild is not on path, trying known locations..."
+		vs_msbuild_dir="${vs_root_dir}/Enterprise/MSBuild/Current/Bin"
+		[[ -e "${vs_msbuild_dir}/MSBuild.exe" ]] || die "MSBuild.exe could not be located"
+		export PATH="${vs_msbuild_dir}:$PATH"
+		echo "MSBuild found in ${vs_msbuild_dir} (added to PATH)"
+	fi
+fi
 
 if [[ "${HOST_OS_TYPE}" == "MacOS" ]]; then
 	NUM_CPUS=$(sysctl -n hw.ncpu)
@@ -99,6 +189,8 @@ if [[ "${HOST_OS_TYPE}" == "MacOS" ]]; then
 	else
 		echo "WARNING: CMake binary not found on PATH and also not in ${cmake_bin_path}"
 	fi
+elif [[ "${HOST_OS_TYPE}" == "Windows" ]]; then
+	NUM_CPUS=$NUMBER_OF_PROCESSORS
 else
 	NUM_CPUS=$(cat /proc/cpuinfo | grep -E 'processor\s*:' | nl | tail -n1 | sed -e 's/\s*\([0-9]\+\)\s.*/\1/')
 fi

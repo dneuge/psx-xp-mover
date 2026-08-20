@@ -3,6 +3,7 @@ SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
 PROJECT(xpmover)
 
 INCLUDE(CheckIncludeFile)
+INCLUDE(CheckCSourceCompiles)
 
 SET(CMAKE_BUILD_TYPE Debug)
 SET(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
@@ -23,6 +24,18 @@ ENDIF()
 MESSAGE(STATUS "Detected C compiler: ${CMAKE_C_COMPILER_ID}")
 MESSAGE(STATUS "Detected C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
 
+IF(CMAKE_GENERATOR MATCHES "Visual Studio")
+    MESSAGE(STATUS "Detected Visual Studio")
+    SET(MSVC TRUE)
+
+    # VS should only ever be instructed to do release builds:
+    #   1. debug builds may link against versions of standard libraries which
+    #      cannot be obtained without Visual Studio and do not allow redistribution
+    #   2. debug builds define _ITERATOR_DEBUG_LEVEL to values incompatible with
+    #      libraries to be linked
+    SET(CMAKE_BUILD_TYPE Release)
+ENDIF()
+
 IF(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     MESSAGE(WARNING "It seems that you are trying to build using GCC which would potentially result in badly licensed binaries spreading GPL3 over network connections and voids integrated license information. Use LLVM/Clang instead.")
     IF(I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS)
@@ -35,6 +48,14 @@ ELSEIF(NOT ((CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_ID STRE
     MESSAGE(FATAL_ERROR "Clang was not detected which voids integrated license information. Use LLVM/CLang instead.")
     RETURN()
 ENDIF()
+
+MESSAGE(STATUS "Build mode: ${CMAKE_BUILD_TYPE}")
+
+SET(ACTUAL_C_OUTPUT_EXTENSION ${CMAKE_C_OUTPUT_EXTENSION})
+IF(OVERRIDE_C_OUTPUT_EXTENSION)
+    SET(ACTUAL_C_OUTPUT_EXTENSION ${OVERRIDE_C_OUTPUT_EXTENSION})
+ENDIF()
+
 
 SET(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/psx.c
@@ -56,14 +77,29 @@ SET(XPMOVER_SOURCES
     ${COMMON_SOURCES}
 )
 
+# check if we have ssize_t
+SET(SSIZET_TEST_SOURCE "\n
+    #include <sys/types.h>\n
+    int main() {\n
+        ssize_t test = 0;\n
+        return 0;
+    }\n
+")
+CHECK_C_SOURCE_COMPILES("${SSIZET_TEST_SOURCE}" HAVE_SSIZE_T FAIL_REGEX "implicit declaration")
+IF(HAVE_SSIZE_T)
+    ADD_DEFINITIONS(-DHAVE_SSIZE_T)
+    MESSAGE(STATUS "added definition HAVE_SSIZE_T")
+ENDIF()
+
 SET(LIB_BUILD "${CMAKE_CURRENT_SOURCE_DIR}/lib/_build")
 
 SET(XPSDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/lib/XPSDK")
 SET(XPSDK_INCLUDE "${XPSDK_ROOT}/CHeaders" CACHE STRING PATH)
 
-IF(LINUX)
+IF(LINUX OR MSVC)
     ADD_LIBRARY(xpmover SHARED ${XPMOVER_SOURCES})
 ELSEIF(WIN32)
+    # cross-compilation with MinGW only, MSVC needs "SHARED" keyword
     ADD_LIBRARY(xpmover MODULE ${XPMOVER_SOURCES})
 ELSEIF(APPLE)
     ADD_EXECUTABLE(xpmover ${XPMOVER_SOURCES})
@@ -115,9 +151,14 @@ ENDIF()
 SET_PROPERTY(TARGET xplm APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${XPSDK_INCLUDE}/XPLM" "${XPSDK_INCLUDE}/Wrappers")
 SET_PROPERTY(TARGET xpwidgets APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${XPSDK_INCLUDE}/XPLM" "${XPSDK_INCLUDE}/Widgets" "${XPSDK_INCLUDE}/Wrappers")
 
+SET(STANDARD_LIBRARIES "m")
+IF(MSVC)
+    SET(STANDARD_LIBRARIES "")
+ENDIF()
+
 TARGET_COMPILE_DEFINITIONS(xpmover PUBLIC -DXPLM200=1 -DXPLM210=1 -DXPLM300=1 -DXPLM301=1 -DXPLM302=1 -DXPLM303=1 -DHAVE_XPLM)
 TARGET_INCLUDE_DIRECTORIES(xpmover PUBLIC "${XPSDK_INCLUDE}/XPLM" "${XPSDK_INCLUDE}/Widgets" "${XPSDK_INCLUDE}/Wrappers" "${LIB_BUILD}")
-TARGET_LINK_LIBRARIES(xpmover PUBLIC ${XPLM_LIBRARY} ${XPWIDGETS_LIBRARY} m)
+TARGET_LINK_LIBRARIES(xpmover PUBLIC ${XPLM_LIBRARY} ${XPWIDGETS_LIBRARY} ${STANDARD_LIBRARIES})
 
 IF(LINUX)
     TARGET_LINK_LIBRARIES(xpmover PUBLIC c)
@@ -126,7 +167,7 @@ ELSEIF(APPLE)
 ELSEIF(WIN32)
     SET(OS_LIBRARIES bcrypt iphlpapi ws2_32)
     TARGET_LINK_LIBRARIES(xpmover PUBLIC ${OS_LIBRARIES})
-    TARGET_LINK_OPTIONS(xpmover PRIVATE -static-libstdc++ -static-libgcc) # TODO: this relicenses the binary to GPL, replace by more liberal libraries
+    #TARGET_LINK_OPTIONS(xpmover PRIVATE -static-libstdc++ -static-libgcc) # TODO: this relicenses the binary to GPL, replace by more liberal libraries
 ENDIF()
 
 IF(NOT APPLE)
@@ -144,9 +185,9 @@ SET_TARGET_PROPERTIES(xpmover PROPERTIES SUFFIX ".xpl")
 IF(BUILD_TESTS)
     ADD_EXECUTABLE(manualtest-psx-client ${CMAKE_CURRENT_SOURCE_DIR}/src/manualtest_psx_client.c ${COMMON_SOURCES})
     TARGET_INCLUDE_DIRECTORIES(manualtest-psx-client PUBLIC "${LIB_BUILD}")
-    TARGET_LINK_LIBRARIES(manualtest-psx-client PUBLIC ${LINK_C11_COMPAT_STATIC} ${OS_LIBRARIES} m)
+    TARGET_LINK_LIBRARIES(manualtest-psx-client PUBLIC ${LINK_C11_COMPAT_STATIC} ${OS_LIBRARIES} ${STANDARD_LIBRARIES})
 
     ADD_EXECUTABLE(manualtest-psx-parse ${CMAKE_CURRENT_SOURCE_DIR}/src/manualtest_psx_parse.c ${COMMON_SOURCES})
     TARGET_INCLUDE_DIRECTORIES(manualtest-psx-parse PUBLIC "${LIB_BUILD}")
-    TARGET_LINK_LIBRARIES(manualtest-psx-parse PUBLIC ${LINK_C11_COMPAT_STATIC} ${OS_LIBRARIES} m)
+    TARGET_LINK_LIBRARIES(manualtest-psx-parse PUBLIC ${LINK_C11_COMPAT_STATIC} ${OS_LIBRARIES} ${STANDARD_LIBRARIES})
 ENDIF()

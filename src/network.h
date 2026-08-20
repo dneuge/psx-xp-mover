@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include "types_compat.h"
+
 #ifdef RESOLVED_ADDRESSES_T_REAL_TYPE
 typedef RESOLVED_ADDRESSES_T_REAL_TYPE resolved_addresses_t;
 #else

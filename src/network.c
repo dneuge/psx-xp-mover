@@ -2,6 +2,7 @@
 #include <string.h>
 #include <errno.h>
 
+#if defined(TARGET_LINUX) || defined(TARGET_MACOS)
 //#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -11,25 +12,39 @@
 
 //static const int SOCKOPT_ENABLE_VALUE = 1;
 //#define SOCKOPT_ENABLE_SIZE sizeof(int)
+#elif TARGET_WINDOWS
+// Windows API
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
+
+// // Microsoft API docs:
+// // [sdk-api] docs/sdk-api-src/content/winsock2/nf-winsock2-shutdown.md
+//
+//#define SHUT_RD SD_RECEIVE
+
+//static const char SOCKOPT_ENABLE_VALUE = 1;
+//#define SOCKOPT_ENABLE_SIZE sizeof(char)
+#else
+#error "OS-specific early parts of network.c are missing; target OS is not supported"
+#endif
 
 #define RESOLVED_ADDRESSES_T_REAL_TYPE struct addrinfo*
 
 #include "network.h"
 
 // suppress SIGPIPE on Linux which has MSG_NOSIGNAL
-// macOS has a socket option instead
+// macOS has a socket option instead, Windows doesn't know the signal at all
 #ifdef TARGET_LINUX
 #define NETWORK_SEND_FLAGS (MSG_NOSIGNAL)
 #else
 #define NETWORK_SEND_FLAGS (0)
 #endif
 
-bool initialize_os_network_apis() {
-    // nothing to do for this target system
-    return true;
-}
-
 bool resolve_addresses(resolved_addresses_t *resolved_addresses, char *hostname) {
+    // Windows seems to be the same as POSIX; for future reference:
+    // https://github.com/MicrosoftDocs/sdk-api/blob/07512580a99bac226f8730c8f85344270f1beeff/sdk-api-src/content/ws2tcpip/nf-ws2tcpip-getaddrinfo.md
+
     if (!hostname || !resolved_addresses) {
         return false;
     }
@@ -80,6 +95,8 @@ bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_add
 
     int sd = -1;
 
+    // Windows seems to be the same as POSIX; for future reference:
+    // https://github.com/MicrosoftDocs/sdk-api/blob/07512580a99bac226f8730c8f85344270f1beeff/sdk-api-src/content/ws2tcpip/nf-ws2tcpip-getaddrinfo.md
     for (struct addrinfo *resolved_address = *resolved_addresses; resolved_address; resolved_address = resolved_address->ai_next) {
         if (resolved_address->ai_socktype != SOCK_STREAM) {
             continue;
@@ -122,6 +139,8 @@ void write_network_string(socket_t sd, char *s) {
     send(sd, s, strlen(s), NETWORK_SEND_FLAGS);
 }
 
-void close_network_socket(socket_t sd) {
-    close(sd);
-}
+#if defined(TARGET_LINUX) || defined(TARGET_MACOS)
+#include "network_posix.c"
+#elif TARGET_WINDOWS
+#include "network_windows.c"
+#endif

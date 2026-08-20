@@ -1,5 +1,18 @@
 #include "utils.h"
 
+#ifdef TARGET_WINDOWS
+// needs to be set to make math constant defines available on MSVC
+// https://github.com/MicrosoftDocs/cpp-docs/blob/f927e4f8273047750b384b41788a005a1a31fa62/docs/c-runtime-library/math-constants.md
+#define _USE_MATH_DEFINES
+#endif
+
+#ifdef _MSC_VER
+// MSVC linker fails to find inline methods, disable modifier
+#define MAY_INLINE
+#else
+#define MAY_INLINE inline
+#endif
+
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,30 +117,30 @@ char* copy_string(char *s) {
 #define FACTOR_DEGREES_PER_RADIAN (180.0 / M_PI)
 #define FACTOR_RADIANS_PER_DEGREE (M_PI / 180.0)
 
-inline double deg2rad(double degrees) {
+MAY_INLINE double deg2rad(double degrees) {
     return degrees * FACTOR_RADIANS_PER_DEGREE;
 }
 
-inline double rad2deg(double radians) {
+MAY_INLINE double rad2deg(double radians) {
     return radians * FACTOR_DEGREES_PER_RADIAN;
 }
 
-inline double nauticalmiles2meters(double nautical_miles) {
+MAY_INLINE double nauticalmiles2meters(double nautical_miles) {
     return nautical_miles * METERS_PER_NAUTICAL_MILE;
 }
 
-inline double meters2nauticalmiles(double meters) {
+MAY_INLINE double meters2nauticalmiles(double meters) {
     return meters * NAUTICAL_MILES_PER_METER;
 }
 
 #define METERS_PER_FOOT (0.3048)
 #define FEET_PER_METER (1.0 / METERS_PER_FOOT)
 
-inline double feet2meters(double feet) {
+MAY_INLINE double feet2meters(double feet) {
     return feet * METERS_PER_FOOT;
 }
 
-inline double meters2feet(double meters) {
+MAY_INLINE double meters2feet(double meters) {
     return meters * FEET_PER_METER;
 }
 

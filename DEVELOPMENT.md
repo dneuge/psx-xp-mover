@@ -59,11 +59,15 @@ Depending on the target platform...
       dependencies use licenses not approved by OSI, which is one of the key requirements to be able to use the
       Community edition at least in an "organizational" context. It should probably be okay to use the
       Community edition for local development but redistributable releases would probably violate the license agreement.
-  * Cross-compilation is only possible via MinGW which is based on GCC and thus creates licensing issues
-    for redistribution in addition to other legal questions regarding the use of Windows APIs without a
-    Microsoft-supplied toolchain. \
-    Cross-compilation from Linux using MinGW is supported for development but not for distribution (see the
-    paragraph above on how to bypass the GCC lockout).
+  * Cross-compilation via MinGW is currently not possible:
+    * This project uses C11 threads which are currently not supported by MinGW and would require an additional
+      dependency to establish compatibility. C11 threads are supported out-of-the-box with Visual Studio, which
+      therefore is the preferred suite to compile this project with for Windows.
+    * MinGW is based on GCC and thus creates licensing issues
+      for redistribution in addition to other legal questions regarding the use of Windows APIs without a
+      Microsoft-supplied toolchain. \
+      Cross-compilation from Linux using MinGW would only be supported for development but not for distribution (see the
+      paragraph above on how to bypass the GCC lockout).
 
 ## Releases, Forks
 
