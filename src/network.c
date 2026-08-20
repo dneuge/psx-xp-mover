@@ -16,6 +16,14 @@
 
 #include "network.h"
 
+// suppress SIGPIPE on Linux which has MSG_NOSIGNAL
+// macOS has a socket option instead
+#ifdef TARGET_LINUX
+#define NETWORK_SEND_FLAGS (MSG_NOSIGNAL)
+#else
+#define NETWORK_SEND_FLAGS (0)
+#endif
+
 bool initialize_os_network_apis() {
     // nothing to do for this target system
     return true;
@@ -107,11 +115,11 @@ bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_add
 }
 
 ssize_t read_network(socket_t sd, char *buffer, size_t buffer_size) {
-    return read(sd, buffer, buffer_size);
+    return recv(sd, buffer, buffer_size, 0);
 }
 
 void write_network_string(socket_t sd, char *s) {
-    write(sd, s, strlen(s));
+    send(sd, s, strlen(s), NETWORK_SEND_FLAGS);
 }
 
 void close_network_socket(socket_t sd) {
