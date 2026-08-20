@@ -182,6 +182,7 @@ static int run_connection_loop(void *ref) {
         char *line_buffer_write_cursor = line_buffer;
         char *past_line_buffer = line_buffer + LINE_BUFFER_SIZE;
         bool success = true;
+        bool had_carriage_return = false;
         while (!client->should_shutdown) {
             ssize_t num_received = read_network(sd, recv_buffer, RECV_BUFFER_SIZE);
             if (num_received <= 0) {
@@ -190,15 +191,25 @@ static int run_connection_loop(void *ref) {
 
             for (int i=0; i<num_received; i++) {
                 char ch = recv_buffer[i];
-                if (ch == '\n') {
-                    *line_buffer_write_cursor = 0;
-                    success = on_line_received(client, line_buffer);
-                    if (!success) {
-                        printf("[XPMover] failed to process line: %s\n", line_buffer);
-                        break;
-                    }
 
-                    line_buffer_write_cursor = line_buffer;
+                bool is_carriage_return = (ch == '\r');
+                if (is_carriage_return) {
+                    ch = '\n';
+                }
+
+                if (ch == '\n') {
+                    // PSX running on Windows sends CR LF; if we just had CR and now got LF the line appears empty and
+                    // processing has to be skipped
+                    if (!had_carriage_return) {
+                        *line_buffer_write_cursor = 0;
+                        success = on_line_received(client, line_buffer);
+                        if (!success) {
+                            printf("[XPMover] failed to process line: %s\n", line_buffer);
+                            break;
+                        }
+
+                        line_buffer_write_cursor = line_buffer;
+                    }
                 } else {
                     *line_buffer_write_cursor = ch;
                     line_buffer_write_cursor++;
@@ -209,6 +220,8 @@ static int run_connection_loop(void *ref) {
                     success = false;
                     break;
                 }
+
+                had_carriage_return = is_carriage_return;
             }
 
             if (!success) {
