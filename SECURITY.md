@@ -8,11 +8,11 @@ latest trunk version (i.e. head revision of `main` Git branch) is supported.
 ## Attack Vectors
 
 This project is executed as a plugin within the X-Plane (XP) flight simulator, connecting to an instance of the Aerowinx
-Precision Simulator 10 (PSX) flight simulator over UDP. It receives a continuous stream of position & status information
+Precision Simulator 10 (PSX) flight simulator over TCP. It receives a continuous stream of position & status information
 from PSX and applies it to the user's aircraft model in XP. The plugin also exchanges information over so-called
 datarefs (shared variables) within X-Plane.
 
-Attack vectors could be maliciously crafted dataref or UDP input, however this would require a malicious actor to
+Attack vectors could be maliciously crafted dataref or PSX data, however this would require a malicious actor to
 already have some control over the victim's machine or flight simulation network.
 
 ## Reporting Security Issues
