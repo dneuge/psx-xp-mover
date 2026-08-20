@@ -140,6 +140,7 @@ static XPLMDataRef dataref_ground_contact = NULL;
 static XPLMDataRef dataref_total_running_time_sec = NULL;
 
 static bool datarefs_initialized = false;
+static bool has_dataref_cabin_altitude = false; // dataref is only available on XP12 but this plugin also supports XP11 (will not be found at runtime)
 
 static XPLMProbeRef probe = NULL;
 static XPLMProbeInfo_t *probe_info = NULL;
@@ -638,7 +639,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= find_dataref(&dataref_override_oxygen, "sim/operation/override/override_oxygen_system");
         success &= find_dataref(&dataref_override_pressurization, "sim/operation/override/override_pressurization");
         success &= find_dataref(&dataref_override_planepath, "sim/operation/override/override_planepath");
-        success &= find_dataref(&dataref_cabin_altitude, "sim/cockpit/pressure/cabin_altitude_actual_ft");
+        has_dataref_cabin_altitude = find_dataref(&dataref_cabin_altitude, "sim/cockpit/pressure/cabin_altitude_actual_ft"); // since XP 12.0.7
         success &= find_dataref(&dataref_pilot_felt_altitude, "sim/cockpit2/oxygen/indicators/pilot_felt_altitude_ft");
         success &= find_dataref(&dataref_psi_hdg, "sim/flightmodel/position/psi");
         success &= find_dataref(&dataref_phi_roll, "sim/flightmodel/position/phi");
@@ -1008,7 +1009,9 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 
     XPLMSetDatai(dataref_override_oxygen, 1);
     XPLMSetDatai(dataref_override_pressurization, 1);
-    XPLMSetDataf(dataref_cabin_altitude, 0.0f);
+    if (has_dataref_cabin_altitude) {
+        XPLMSetDataf(dataref_cabin_altitude, 0.0f);
+    }
     XPLMSetDataf(dataref_pilot_felt_altitude, 0.0f);
 
     if (!suspend_injection) {
@@ -1139,6 +1142,7 @@ PLUGIN_API void XPluginDisable() {
     }
 
     datarefs_initialized = false;
+    has_dataref_cabin_altitude = false;
 
     if (psx_client) {
         if (destroy_psx_client(psx_client)) {
