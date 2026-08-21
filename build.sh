@@ -29,7 +29,7 @@ mkdir -p "${release_dir}"
 ## BUILD
 cd "${build_dir}"
 
-cmake -D XPLANE_TARGET="${XPLANE_TARGET}" -D I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS="${I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS:-False}" .. || die "CMake failed"
+cmake -D XPLANE_TARGET="${XPLANE_TARGET}" -D I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS="${I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS:-False}" $@ .. || die "CMake failed"
 if [[ "${BUILD_SYSTEM}" == "vs" ]]; then
     MSYS_NO_PATHCONV=1 msbuild.exe xpmover.vcxproj /t:Build /p:Configuration=Release || die "msbuild xpmover failed"
     MSYS_NO_PATHCONV=1 msbuild.exe manualtest-psx-client.vcxproj /t:Build /p:Configuration=Release || die "msbuild manualtest-psx-client failed"

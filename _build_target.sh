@@ -63,16 +63,27 @@ fi
 export BUILD_SYSTEM
 
 BUILD_TARGET="$(tr '[:upper:]' '[:lower:]' <<<$HOST_OS_TYPE)"
-if [[ "$#" -ge 1 ]]; then
+if [[ "$#" -ge 1 ]] && [[ "$1" != "--" ]]; then
 	BUILD_TARGET="$1"
+	shift
 fi
 export BUILD_TARGET
 
 XPLANE_TARGET="12.04"
-if [[ "$#" -ge 2 ]]; then
-	XPLANE_TARGET="$2"
+if [[ "$#" -ge 1 ]] && [[ "$1" != "--" ]]; then
+	XPLANE_TARGET="$1"
+	shift
 fi
 export XPLANE_TARGET
+
+# extra arguments after "--" will be available to caller as $@ or by indexed access
+if [[ "$#" -ge 1 ]]; then
+  if [[ "$1" == "--" ]]; then
+    shift
+  else
+    die "Unhandled trailing arguments: $@"
+  fi
+fi
 
 re_supported_xp_target='^11|12\.04$'
 if [[ ! "${XPLANE_TARGET}" =~ $re_supported_xp_target ]]; then

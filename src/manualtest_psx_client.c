@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "logger.h"
 #include "psx.h"
 #include "utils.h"
 
@@ -16,7 +17,7 @@ static int num_stats_recorded = 0;
 static int timestamp_millis_parts[NUM_STATS_EVALUATE] = {0};
 
 static void on_receive(psx_boost_frame_t *frame) {
-    psx_print_boost_frame(frame);
+    psx_log_boost_frame(frame, MVLOG_LEVEL_INFO);
 
     timestamp_millis_parts[num_stats_recorded] = frame->timestamp_millis_part;
     num_stats_recorded++;
@@ -51,10 +52,13 @@ static void on_receive(psx_boost_frame_t *frame) {
     double avg_interval = (double) sum / NUM_STATS_EVALUATE;
     double avg_fps = 1000 / avg_interval;
 
-    printf("[XPMover] [Stats] Boost frame intervals: min=%d, max=%d, avg=%.2f, fps=%.2f\n", min_interval, max_interval, avg_interval, avg_fps);
+    MVLOG_INFO("[Stats] Boost frame intervals: min=%d, max=%d, avg=%.2f, fps=%.2f", min_interval, max_interval, avg_interval, avg_fps);
 }
 
 int main(int argc, char **argv) {
+    xpmover_log_init();
+    xpmover_set_min_log_level_console(MVLOG_LEVEL_TRACE);
+
     if (argc < 2 || argc > 3) {
         print_help();
         return 1;

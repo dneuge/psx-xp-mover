@@ -31,6 +31,8 @@
 
 #define RESOLVED_ADDRESSES_T_REAL_TYPE struct addrinfo*
 
+#include "logger.h"
+
 #include "network.h"
 
 // suppress SIGPIPE on Linux which has MSG_NOSIGNAL
@@ -56,12 +58,12 @@ bool resolve_addresses(resolved_addresses_t *resolved_addresses, char *hostname)
     struct addrinfo *res = NULL;
     int err = getaddrinfo(hostname, NULL, &hints, &res);
     if (err) {
-        printf("[XPMover] address lookup failed: %s\n", gai_strerror(err));
+        MVLOG_WARN("address lookup failed: %s", gai_strerror(err));
         return false;
     }
 
     if (!res) {
-        printf("[XPMover] address lookup did not yield any results\n");
+        MVLOG_WARN("address lookup did not yield any results");
         return false;
     }
 
@@ -82,14 +84,14 @@ void free_addresses(resolved_addresses_t *resolved_addresses) {
 
 bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_addresses_t *resolved_addresses) {
     if (!out_sd || !hostname || !resolved_addresses) {
-        printf("[XPMover] connect_tcp_client missing parameters out_sd=%p, hostname=%p, resolved_addresses=%p\n", out_sd, hostname, resolved_addresses);
+        MVLOG_WARN("connect_tcp_client missing parameters out_sd=%p, hostname=%p, resolved_addresses=%p", out_sd, hostname, resolved_addresses);
         return false;
     }
 
-    printf("[XPMover] connecting to %s:%d\n", hostname, port);
+    MVLOG_INFO("connecting to %s:%d", hostname, port);
 
     if (!resolve_addresses(resolved_addresses, hostname) || !(*resolved_addresses)) {
-        printf("[XPMover] address not resolved, unable to connect\n");
+        MVLOG_WARN("address not resolved, unable to connect");
         return false;
     }
 
@@ -113,17 +115,17 @@ bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_add
             continue;
         }
 
-        printf("[XPMover] connecting via IPv%d...\n", ip_version);
+        MVLOG_DEBUG("connecting via IPv%d...", ip_version);
         sd = socket(resolved_address->ai_family, resolved_address->ai_socktype, resolved_address->ai_protocol);
         if (sd == -1) {
-            printf("[XPMover] failed to create socket: %d %s\n", errno, strerror(errno));
+            MVLOG_WARN("failed to create socket: %d %s", errno, strerror(errno));
         } else {
             if (connect(sd, resolved_address->ai_addr, resolved_address->ai_addrlen) == 0) {
                 *out_sd = sd;
                 return true;
             }
 
-            printf("[XPMover] socket failed to connect: %d %s\n", errno, strerror(errno));
+            MVLOG_WARN("socket failed to connect: %d %s", errno, strerror(errno));
             close_network_socket(sd);
         }
     }

@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include "logger.h"
 #include "utils.h"
 
 #include "interpolation.h"
@@ -82,15 +83,21 @@ void interpolator_reset(interpolator_t *instance) {
 }
 
 static void interpolator_dump(interpolator_t *instance) {
+#if (MVLOG_COMPILED_MIN_LOG_LEVEL <= MVLOG_LEVEL_TRACE)
+    if (!xpmover_is_log_level_enabled(MVLOG_LEVEL_TRACE)) {
+        return;
+    }
+
     unsigned int remaining_frames = instance->num_frames;
-    printf("[XPMover] dump num_frames=%d\n", remaining_frames);
+    MVLOG_TRACE("dump num_frames=%d", remaining_frames);
     int frame_index = (int) instance->frames_start;
     while (remaining_frames > 0) {
         interpolator_key_frame_t *frame = &instance->frames[frame_index];
-        printf("[XPMover]      #%02d %03d %f\n", frame_index, frame->timestamp_millis_part, frame->value);
+        MVLOG_TRACE("     #%02d %03d %f", frame_index, frame->timestamp_millis_part, frame->value);
         frame_index = ipmod(frame_index + 1, MAX_INTERPOLATOR_FRAMES);
         remaining_frames--;
     }
+#endif
 }
 
 void interpolator_maintain(interpolator_t *instance, double timestamp_millis_part) {
@@ -113,7 +120,7 @@ void interpolator_maintain(interpolator_t *instance, double timestamp_millis_par
     }
 
     if (timestamp_millis_diff < 0 || timestamp_millis_diff >= MAX_INTERPOLATOR_FRAME_TIME_DIFF_MILLIS) {
-        printf("[XPMover] maintenance resets interpolator; timestamp_millis_part=%.2f => %d, L%02d %03d => diff %d\n", timestamp_millis_part, timestamp_millis_part_int, latest_frame_index, latest_frame->timestamp_millis_part, timestamp_millis_diff); // DEBUG
+        MVLOG_DEBUG("maintenance resets interpolator; timestamp_millis_part=%.2f => %d, L%02d %03d => diff %d", timestamp_millis_part, timestamp_millis_part_int, latest_frame_index, latest_frame->timestamp_millis_part, timestamp_millis_diff);
         interpolator_reset(instance);
     }
 }
@@ -164,12 +171,9 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
         return NAN;
     }
 
-    /*
-    // DEBUG
-    printf("[XPMover] --- INTERPOLATOR\n");
-    printf("[XPMover] query time %.6f\n", timestamp_millis_part);
+    MVLOG_TRACE("--- INTERPOLATOR");
+    MVLOG_TRACE("query time %.6f", timestamp_millis_part);
     interpolator_dump(instance);
-    */
 
     int target_frame_index = ipmod(instance->frames_start + instance->num_frames - 1, MAX_INTERPOLATOR_FRAMES);
     interpolator_key_frame_t *target_frame = &instance->frames[target_frame_index];
@@ -177,9 +181,9 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
     if (time_to_target_frame < 0) {
         time_to_target_frame += 1000;
     }
-    //printf("[XPMover] time check T%02d %03d => time_to_target_frame=%8.6fms\n", target_frame_index, target_frame->timestamp_millis_part, time_to_target_frame);
+    MVLOG_TRACE("time check T%02d %03d => time_to_target_frame=%8.6fms", target_frame_index, target_frame->timestamp_millis_part, time_to_target_frame);
     if (time_to_target_frame > MAX_INTERPOLATOR_FRAME_TIME_DIFF_MILLIS) {
-        printf("[XPMover] max interpolator frame time difference exceeded: %.6f (off by %.2fms)\n", time_to_target_frame, (1000-time_to_target_frame));
+        MVLOG_WARN("max interpolator frame time difference exceeded: %.6f (off by %.2fms)", time_to_target_frame, (1000-time_to_target_frame));
         return NAN;
     }
 
@@ -191,8 +195,8 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
         base_frame = &instance->frames[base_frame_index];
         remaining_frames--;
 
-        //printf("[XPMover] check B%02d %03d %.6f\n", base_frame_index, base_frame->timestamp_millis_part, base_frame->value);
-        //printf("[XPMover] check T%02d %03d %.6f\n", target_frame_index, target_frame->timestamp_millis_part, target_frame->value);
+        MVLOG_TRACE("check B%02d %03d %.6f", base_frame_index, base_frame->timestamp_millis_part, base_frame->value);
+        MVLOG_TRACE("check T%02d %03d %.6f", target_frame_index, target_frame->timestamp_millis_part, target_frame->value);
 
         int time_between_frames = (int) target_frame->timestamp_millis_part - (int) base_frame->timestamp_millis_part;
         if (time_between_frames < 0) {
@@ -210,7 +214,7 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
     }
 
     if (!between_frames) {
-        printf("[XPMover] abort interpolation, not between frames\n"); // DEBUG
+        MVLOG_DEBUG("abort interpolation, not between frames");
         return NAN;
     }
 
@@ -226,10 +230,10 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
 
     // no need to calculate anything if we would end up exactly on a data point or are out of range (conversion error)
     if (millis_since_base <= 0) {
-        //printf("[XPMover] abort interpolation with base frame; millis_since_base=%f\n", millis_since_base); // DEBUG
+        MVLOG_TRACE("abort interpolation with base frame; millis_since_base=%f", millis_since_base);
         return base_frame->value;
     } else if (millis_since_base >= millis_between_frames) {
-        //printf("[XPMover] abort interpolation with target frame; millis_since_base=%f, millis_between_frames=%d\n", millis_since_base, millis_between_frames); // DEBUG
+        MVLOG_TRACE("abort interpolation with target frame; millis_since_base=%f, millis_between_frames=%d", millis_since_base, millis_between_frames);
         return target_frame->value;
     }
 
@@ -237,13 +241,10 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
     double value_diff = target_frame->value - base_frame->value;
     double interpolated = dlimit(base_frame->value + (fraction * value_diff), base_frame->value, target_frame->value);
 
-    /*
-    // DEBUG
-    printf(
-        "[XPMover] interpolation res %.6f (millis_since_base=%f, millis_between_frames=%d, base=%.6f, target=%.6f, fraction=%.3f)\n",
+    MVLOG_TRACE(
+        "interpolation res %.6f (millis_since_base=%f, millis_between_frames=%d, base=%.6f, target=%.6f, fraction=%.3f)",
         interpolated, millis_since_base, millis_between_frames, base_frame->value, target_frame->value, fraction
     );
-    */
 
     return interpolated;
 }

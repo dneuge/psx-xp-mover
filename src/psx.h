@@ -5,6 +5,7 @@
 
 #include "threads_compat.h"
 
+#include "logger.h"
 #include "network.h"
 
 typedef struct {
@@ -25,7 +26,27 @@ typedef struct {
     float bank_degrees;
 } psx_boost_frame_t;
 
-void psx_print_boost_frame(psx_boost_frame_t *frame);
+static inline void psx_log_boost_frame(psx_boost_frame_t *frame, xpmover_log_level_t level) {
+    if (MVLOG_COMPILED_MIN_LOG_LEVEL > level) {
+        return;
+    }
+
+    if (!frame) {
+        MVLOG_WARN("psx_log_boost_frame called with NULL");
+        return;
+    }
+
+    xpmover_log(
+        level, "[Boost] fd_lat=%.14lf, fd_lon=%.15lf, elev_m=%.1lf (%ld), hdg=%.1f (%d), pitch=%.1f (%d), bank=%.1f (%d), g=%d, ts=%u",
+        frame->flight_deck_latitude, frame->flight_deck_longitude,
+        frame->elevation_msl_meters, frame->flight_deck_altitude_msl_feet_hundreds,
+        frame->heading_true_degrees, frame->heading_true_degrees_hundreds,
+        frame->pitch_degrees, frame->pitch_degrees_hundreds,
+        frame->bank_degrees, frame->bank_degrees_hundreds,
+        frame->ground_contact,
+        frame->timestamp_millis_part
+    );
+}
 
 bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line);
 

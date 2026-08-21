@@ -9,7 +9,7 @@ bool initialize_os_network_apis() {
     uint16_t requested_winsock_version = (MAJOR_WINSOCK_VERSION << 8) | MINOR_WINSOCK_VERSION;
     res = WSAStartup(requested_winsock_version, &wsadata);
     if (res) {
-        printf("[XPMover] WSAStartup failed, res=%lu\n", res);
+        MVLOG_ERROR("WSAStartup failed, res=%lu", res);
         return false;
     }
 

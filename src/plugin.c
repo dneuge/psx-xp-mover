@@ -12,6 +12,7 @@
 #include <XPLMScenery.h>
 
 #include "interpolation.h"
+#include "logger.h"
 #include "psx.h"
 #include "utils.h"
 
@@ -303,7 +304,7 @@ static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
                 if (diff_millis <= -500) {
                     diff_millis += 1000;
                 }
-                //printf("clock diff: %5d\n", diff_millis); // DEBUG
+                MVLOG_TRACE("clock diff: %5d", diff_millis);
 
                 diff_receive_timestamp_millis[next_diff_receive_timestamp_millis] = diff_millis;
                 if (num_diff_receive_timestamp_millis < MAX_NUM_TIME_DIFFERENCE_RECORDS) {
@@ -318,15 +319,15 @@ static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
                 }
 
                 avg_time_diff_millis = (double) sum / num_diff_receive_timestamp_millis; // TODO: expose as dataref for debugging?
-                //printf("avg time diff: %8.6f\n", avg_time_diff_millis); // DEBUG
+                MVLOG_TRACE("avg time diff: %8.6f", avg_time_diff_millis);
             }
         }
 
-        //printf("boost frame received local %.2f / remote %d\n", local_receive_timestamp_millis, new_boost_frame->timestamp_millis_part); // DEBUG
+        MVLOG_TRACE("boost frame received local %.2f / remote %d", local_receive_timestamp_millis, new_boost_frame->timestamp_millis_part);
     }
 
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
-        printf("[XPMover] receive callback failed to lock boost frame mutex\n");
+        MVLOG_WARN("receive callback failed to lock boost frame mutex");
         return;
     }
 
@@ -358,7 +359,7 @@ static void announce_dataref(const char *dataref_name) {
     }
 
     if (dataref_editor_plugin_id == XPLM_NO_PLUGIN_ID) {
-        printf("[XPMover] DataRefEditor does not appear to be installed, unable to announce dataref\n");
+        MVLOG_DEBUG("DataRefEditor does not appear to be installed, unable to announce dataref");
         return;
     }
 
@@ -367,17 +368,17 @@ static void announce_dataref(const char *dataref_name) {
 
 static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatad_f inReadDouble, void *inReadRefcon, XPLMSetDatad_f inWriteDouble, void *inWriteRefcon) {
     if (!inDataName) {
-        printf("[XPMover] tried to register nameless dataref\n");
+        MVLOG_WARN("tried to register nameless dataref");
         return false;
     }
 
     if (!dest) {
-        printf("[XPMover] tried to register dataref %s without destination\n", inDataName);
+        MVLOG_WARN("tried to register dataref %s without destination", inDataName);
         return false;
     }
 
     if (!inReadDouble || !inWriteDouble) {
-        printf("[XPMover] tried to register dataref %s without functions\n", inDataName);
+        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
         return false;
     }
 
@@ -408,7 +409,7 @@ static void set_double(void *inRefcon, double value) {
 
 static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
     if (!value_ref) {
-        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_double_dataref(dest, dataref_name, get_double, value_ref, set_double, value_ref);
@@ -416,17 +417,17 @@ static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name
 
 static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatai_f inReadInt, void *inReadRefcon, XPLMSetDatai_f inWriteInt, void *inWriteRefcon) {
     if (!inDataName) {
-        printf("[XPMover] tried to register nameless dataref\n");
+        MVLOG_WARN("tried to register nameless dataref");
         return false;
     }
 
     if (!dest) {
-        printf("[XPMover] tried to register dataref %s without destination\n", inDataName);
+        MVLOG_WARN("tried to register dataref %s without destination", inDataName);
         return false;
     }
 
     if (!inReadInt || !inWriteInt) {
-        printf("[XPMover] tried to register dataref %s without functions\n", inDataName);
+        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
         return false;
     }
 
@@ -457,7 +458,7 @@ static void set_int(void *inRefcon, int value) {
 
 static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
     if (!value_ref) {
-        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
@@ -482,7 +483,7 @@ static void set_bool(void *inRefcon, int value) {
 
 static bool expose_bool_as_dataref(XPLMDataRef *dest, const char *dataref_name, bool *value_ref) {
     if (!value_ref) {
-        printf("[XPMover] tried to expose %s with NULL reference\n", dataref_name);
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_int_dataref(dest, dataref_name, get_bool, value_ref, set_bool, value_ref);
@@ -498,29 +499,29 @@ static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_milli
     bool is_current_frame_too_young = true;
     bool is_current_frame_too_old = false;
 
-    //printf("[XPMover] -------------[find frame]-------------\n"); // DEBUG
-    //printf("[XPMover] num_previous_boost_frames=%d\n", num_previous_boost_frames);
+    MVLOG_TRACE("-------------[find frame]-------------");
+    MVLOG_TRACE("num_previous_boost_frames=%d", num_previous_boost_frames);
 
     for (int i=0; i<num_previous_boost_frames; i++) {
         previous_frame = current_frame;
         previous_frame_age_millis = current_frame_age_millis;
         is_previous_frame_too_young = is_current_frame_too_young;
-        //printf("[XPMover] i=%d, index=%d, reference_millis_part=%d, previous_frame=%p, previous_frame_age_millis=%d, is_previous_frame_too_young=%d\n", i, index, reference_millis_part, previous_frame, previous_frame_age_millis, is_previous_frame_too_young); // DEBUG
+        MVLOG_TRACE("i=%d, index=%d, reference_millis_part=%d, previous_frame=%p, previous_frame_age_millis=%d, is_previous_frame_too_young=%d", i, index, reference_millis_part, previous_frame, previous_frame_age_millis, is_previous_frame_too_young);
 
         current_frame = &(previous_boost_frames[index]);
-        //psx_print_boost_frame(current_frame); // DEBUG
+        psx_log_boost_frame(current_frame, MVLOG_LEVEL_TRACE);
         int frame_diff_millis = reference_millis_part - current_frame->timestamp_millis_part;
         if (frame_diff_millis < 0) {
             frame_diff_millis += 1000;
         } else if (frame_diff_millis >= 1000) {
-            //printf("[XPMover] find_previous_boost_frame_by_age: bad frame difference %d\n", frame_diff_millis);
+            MVLOG_TRACE("find_previous_boost_frame_by_age: bad frame difference %d", frame_diff_millis);
             return NULL;
         }
 
         current_frame_age_millis += frame_diff_millis;
         is_current_frame_too_young = (current_frame_age_millis < minimum_age_millis);
         is_current_frame_too_old = (current_frame_age_millis > maximum_age_millis);
-        //printf("[XPMover] current_frame_age_millis=%d, is_current_frame_too_young=%d, is_current_frame_too_old=%d\n", current_frame_age_millis, is_current_frame_too_young, is_current_frame_too_old); // DEBUG
+        MVLOG_TRACE("current_frame_age_millis=%d, is_current_frame_too_young=%d, is_current_frame_too_old=%d", current_frame_age_millis, is_current_frame_too_young, is_current_frame_too_old);
         if (is_current_frame_too_old) {
             break;
         }
@@ -532,24 +533,27 @@ static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_milli
         reference_millis_part = current_frame->timestamp_millis_part;
     }
 
-    //printf("[XPMover] result: current_frame=%p, previous_frame=%p, is_current_frame_too_young=%d, is_current_frame_too_old=%d, is_previous_frame_too_young=%d\n", current_frame, previous_frame, is_current_frame_too_young, is_current_frame_too_old, is_previous_frame_too_young); // DEBUG
+    MVLOG_TRACE(
+        "result: current_frame=%p, previous_frame=%p, is_current_frame_too_young=%d, is_current_frame_too_old=%d, is_previous_frame_too_young=%d",
+        current_frame, previous_frame, is_current_frame_too_young, is_current_frame_too_old, is_previous_frame_too_young
+    );
 
     if (current_frame && !(is_current_frame_too_young || is_current_frame_too_old)) {
         // current frame matches
-        //printf("[XPMover] using current frame\n"); // DEBUG
+        MVLOG_TRACE("using current frame");
         *actual_age_millis = current_frame_age_millis;
         return current_frame;
     }
 
     if (!is_previous_frame_too_young) {
         // current frame did not match but previous one did
-        //printf("[XPMover] using previous frame\n"); // DEBUG
+        MVLOG_TRACE("using previous frame");
         *actual_age_millis = previous_frame_age_millis;
         return previous_frame;
     }
 
     // no frame matched
-    //printf("[XPMover] no frame matched\n"); // DEBUG
+    MVLOG_TRACE("no frame matched");
     return NULL;
 }
 
@@ -659,7 +663,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             datarefs_initialized = true;
         } else {
             // TODO: disable plugin, it's unlikely that we could recover later
-            printf("[XPMover] unable to find datarefs\n");
+            MVLOG_ERROR("unable to find datarefs");
             return 0;
         }
 
@@ -692,7 +696,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_int_as_dataref(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
-            printf("[XPMover] failed to register datarefs\n");
+            MVLOG_WARN("failed to register datarefs");
         }
     }
 
@@ -701,7 +705,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     // attempt to prevent false detection of hypoxia (cockpit view instantly fades to black even when on a fixed ground
     // position, even at sea level) although that's apparently not enough to fix it.
     if (cycles_to_override_plane_path == 0) {
-        printf("[XPMover] overriding planepath\n");
+        MVLOG_INFO("overriding planepath");
         XPLMSetDatavi(dataref_override_planepath, disable_planepath, 0, 1);
     }
 
@@ -717,7 +721,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             double millis_sim_run = get_millis_sim_run();
             double millis_rtc = get_millis_rtc();
             double diff_millis = millis_rtc - millis_sim_run;
-            //printf("[XPMover] time difference sim total running seconds: XP=%.6f, RTC=%.6f => diff=%.6f\n", millis_sim_run, millis_rtc, diff_millis); // DEBUG
+            MVLOG_TRACE("time difference sim total running seconds: XP=%.6f, RTC=%.6f => diff=%.6f", millis_sim_run, millis_rtc, diff_millis);
             average_psx_time_difference = isnan(diff_millis) ? 0.0 : diff_millis;
         }
     }
@@ -743,7 +747,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
     bool has_debug_override = (debug_spin_hdg != 0.0);
 
     if (mtx_lock(&boost_frame_mutex) != thrd_success) {
-        printf("[XPMover] flight loop failed to lock boost frame mutex\n");
+        MVLOG_WARN("flight loop failed to lock boost frame mutex");
         return CALL_ON_NEXT_FRAME;
     }
 
@@ -762,7 +766,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
             if (interpolation_compensate_time_difference) {
                 interpolation_timestamp_millis_part -= average_psx_time_difference;
             }
-            //printf("[XPMover] now_millis_part=%.2f, avg time diff %.2f, buffer %.2f\n", now_millis_part, average_psx_time_difference, interpolation_buffer_millis);
+            MVLOG_TRACE("now_millis_part=%.2f, avg time diff %.2f, buffer %.2f", now_millis_part, average_psx_time_difference, interpolation_buffer_millis);
             while (interpolation_timestamp_millis_part < 0) {
                 interpolation_timestamp_millis_part += 1000;
             }
@@ -818,14 +822,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         );
         calculated_ground_speed = meters2nauticalmiles((diff_distance_meters * MILLISECONDS_PER_HOUR) / ground_speed_reference_boost_frame_age_millis);
 
-        /*
-        // DEBUG
-        printf("[XPMover] -----------[CALC GROUND SPEED]------------\n");
-        psx_print_boost_frame(&boost_frame_copy);
-        psx_print_boost_frame(ground_speed_reference_boost_frame);
-        printf("[XPMover] reference ground speed frame age: %d\n", ground_speed_reference_boost_frame_age_millis);
-        printf("[XPMover] distance: %lf meters (%lf nm)\n", diff_distance_meters, meters2nauticalmiles(diff_distance_meters));
-        */
+        MVLOG_TRACE("-----------[CALC GROUND SPEED]------------");
+        psx_log_boost_frame(&boost_frame_copy, MVLOG_LEVEL_TRACE);
+        psx_log_boost_frame(ground_speed_reference_boost_frame, MVLOG_LEVEL_TRACE);
+        MVLOG_TRACE("reference ground speed frame age: %d", ground_speed_reference_boost_frame_age_millis);
+        MVLOG_TRACE("distance: %lf meters (%lf nm)", diff_distance_meters, meters2nauticalmiles(diff_distance_meters));
     }
 
     if (is_new_boost_frame) {
@@ -1051,17 +1052,21 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 }
 
 PLUGIN_API int XPluginStart(char *name, char *sig, char *desc) {
-    printf("[XPMover] start\n");
-
     strcpy(name, "PSX XP Mover");
     strcpy(sig, "de.energiequant.psx.xpmover");
     strcpy(desc, "Moves the aircraft according to PSX");
+
+    xpmover_log_init();
+    xpmover_set_min_log_level_console(MVLOG_LEVEL_DEBUG);
+    xpmover_set_min_log_level_xplane(MVLOG_LEVEL_INFO);
+
+    MVLOG_INFO("start"); // FIXME: show version/build info
 
     return 1;
 }
 
 PLUGIN_API int XPluginEnable() {
-    printf("[XPMover] enable\n");
+    MVLOG_INFO("enable");
 
     XPLMCreateFlightLoop_t params = {
         .structSize = sizeof(XPLMCreateFlightLoop_t),
@@ -1073,7 +1078,7 @@ PLUGIN_API int XPluginEnable() {
     if (datarefs_initialized || psx_client || probe || probe_info
         || interpolator_flight_deck_latitude || interpolator_flight_deck_longitude || interpolator_psx_elevation_msl_meters
         || interpolator_heading_true_degrees || interpolator_pitch_degrees || interpolator_bank_degrees) {
-        printf("[XPMover] internal variables are already set, another instance appears to still be running; aborting startup\n");
+        MVLOG_ERROR("internal variables are already set, another instance appears to still be running; aborting startup");
         return 0;
     }
 
@@ -1081,7 +1086,7 @@ PLUGIN_API int XPluginEnable() {
     boost_frame_applied = true;
 
     if (mtx_init(&boost_frame_mutex, mtx_plain) != thrd_success) {
-        printf("[XPMover] failed to initialize boost frame mutex; aborting startup\n");
+        MVLOG_ERROR("failed to initialize boost frame mutex; aborting startup");
         return 0;
     }
     has_boost_frame_mutex = true;
@@ -1094,26 +1099,26 @@ PLUGIN_API int XPluginEnable() {
     interpolator_bank_degrees = create_interpolator();
     if (!(interpolator_flight_deck_latitude && interpolator_flight_deck_longitude && interpolator_psx_elevation_msl_meters
         && interpolator_heading_true_degrees && interpolator_pitch_degrees && interpolator_bank_degrees)) {
-        printf("[XPMover] failed to create interpolators; aborting startup\n");
+        MVLOG_ERROR("failed to create interpolators; aborting startup");
         goto rollback;
     }
 
     psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
     if (!psx_client) {
-        printf("[XPMover] failed to create PSX client; aborting startup\n");
+        MVLOG_ERROR("failed to create PSX client; aborting startup");
         goto rollback;
     }
 
     probe_info = zmalloc(sizeof(XPLMProbeInfo_t));
     if (!probe_info) {
-        printf("[XPMover] failed to allocate probe info; aborting startup\n");
+        MVLOG_ERROR("failed to allocate probe info; aborting startup");
         goto rollback;
     }
     probe_info->structSize = sizeof(XPLMProbeInfo_t);
 
     probe = XPLMCreateProbe(xplm_ProbeY);
     if (!probe) {
-        printf("[XPMover] failed to create probe; aborting startup\n");
+        MVLOG_ERROR("failed to create probe; aborting startup");
         goto rollback;
     }
 
@@ -1134,7 +1139,7 @@ rollback:
 }
 
 PLUGIN_API void XPluginDisable() {
-    printf("[XPMover] disable\n");
+    MVLOG_INFO("disable");
 
     if (flight_loop_registered) {
         XPLMDestroyFlightLoop(flight_loop_after_flight_model_id);
@@ -1148,7 +1153,7 @@ PLUGIN_API void XPluginDisable() {
         if (destroy_psx_client(psx_client)) {
             psx_client = NULL;
         } else {
-            printf("[XPMover] PSX client could not be destroyed, failed to terminate properly\n");
+            MVLOG_ERROR("PSX client could not be destroyed, failed to terminate properly");
         }
     }
 
@@ -1209,7 +1214,7 @@ PLUGIN_API void XPluginDisable() {
 }
 
 PLUGIN_API void XPluginStop() {
-    printf("[XPMover] stop\n");
+    MVLOG_DEBUG("stop");
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, long msg, void *p) {

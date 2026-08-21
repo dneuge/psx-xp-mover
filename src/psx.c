@@ -20,24 +20,6 @@
 
 const char exit_line[] = "exit\n";
 
-void psx_print_boost_frame(psx_boost_frame_t *frame) {
-    if (!frame) {
-        printf("[XPMover] psx_print_boost_frame called with NULL\n");
-        return;
-    }
-
-    printf(
-        "[XPMover] [Boost] fd_lat=%.14lf, fd_lon=%.15lf, elev_m=%.1lf (%ld), hdg=%.1f (%d), pitch=%.1f (%d), bank=%.1f (%d), g=%d, ts=%u\n",
-        frame->flight_deck_latitude, frame->flight_deck_longitude,
-        frame->elevation_msl_meters, frame->flight_deck_altitude_msl_feet_hundreds,
-        frame->heading_true_degrees, frame->heading_true_degrees_hundreds,
-        frame->pitch_degrees, frame->pitch_degrees_hundreds,
-        frame->bank_degrees, frame->bank_degrees_hundreds,
-        frame->ground_contact,
-        frame->timestamp_millis_part
-    );
-}
-
 static bool parse_ground_flag(bool *dest, char *s, int length) {
     if (length != 1) {
         return false;
@@ -60,7 +42,7 @@ static bool parse_ground_flag(bool *dest, char *s, int length) {
 
 bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line) {
     if (!(frame && line)) {
-        printf("[XPMover] psx_parse_boost_frame called with null: frame=%p, line=%p\n", frame, line);
+        MVLOG_WARN("psx_parse_boost_frame called with null: frame=%p, line=%p", frame, line);
         return false;
     }
 
@@ -137,14 +119,14 @@ bool psx_recalculate_boost_frame(psx_boost_frame_t *frame) {
 static bool on_line_received(psx_client_t *client, char *line) {
     psx_boost_frame_t boost_frame = {0};
     if (!psx_parse_boost_frame(&boost_frame, line)) {
-        printf("[XPMover] failed to parse boost line\n");
-        psx_print_boost_frame(&boost_frame);
+        MVLOG_WARN("failed to parse boost line");
+        psx_log_boost_frame(&boost_frame, MVLOG_LEVEL_WARN);
         return false;
     }
 
     if (!psx_recalculate_boost_frame(&boost_frame)) {
-        printf("[XPMover] failed to recalculate boost frame\n");
-        psx_print_boost_frame(&boost_frame);
+        MVLOG_WARN("failed to recalculate boost frame");
+        psx_log_boost_frame(&boost_frame, MVLOG_LEVEL_WARN);
         return false;
     }
 
@@ -155,7 +137,7 @@ static bool on_line_received(psx_client_t *client, char *line) {
 
 static int run_connection_loop(void *ref) {
     psx_client_t *client = ref;
-    printf("[XPMover] connection thread started\n");
+    MVLOG_DEBUG("connection thread started");
 
     bool first_connection = true;
     while (!client->should_shutdown) {
@@ -165,18 +147,18 @@ static int run_connection_loop(void *ref) {
             first_connection = false;
         } else {
             if (thrd_sleep(&(struct timespec){.tv_sec=RECONNECT_DELAY_SECONDS}, NULL)) {
-                printf("[XPMover] sleep before reconnect failed or was interrupted; aborting\n");
+                MVLOG_WARN("sleep before reconnect failed or was interrupted; aborting");
                 break;
             }
         }
 
         socket_t sd;
         if (!connect_tcp_client(&sd, client->hostname, client->port, &client->resolved_addresses)) {
-            printf("[XPMover] connection failed\n");
+            MVLOG_WARN("connection failed");
             continue;
         }
 
-        printf("[XPMover] connected\n");
+        MVLOG_INFO("connected");
         char recv_buffer[RECV_BUFFER_SIZE] = {0,};
         char line_buffer[LINE_BUFFER_SIZE] = {0,};
         char *line_buffer_write_cursor = line_buffer;
@@ -204,7 +186,7 @@ static int run_connection_loop(void *ref) {
                         *line_buffer_write_cursor = 0;
                         success = on_line_received(client, line_buffer);
                         if (!success) {
-                            printf("[XPMover] failed to process line: %s\n", line_buffer);
+                            MVLOG_WARN("failed to process line: %s", line_buffer);
                             break;
                         }
 
@@ -216,7 +198,7 @@ static int run_connection_loop(void *ref) {
                 }
 
                 if (line_buffer_write_cursor >= past_line_buffer) {
-                    printf("[XPMover] excessive line length\n");
+                    MVLOG_WARN("excessive line length");
                     success = false;
                     break;
                 }
@@ -229,30 +211,30 @@ static int run_connection_loop(void *ref) {
             }
         }
 
-        printf("[XPMover] closing connection\n");
+        MVLOG_INFO("closing connection");
         write_network_string(sd, (char*) exit_line);
         close_network_socket(sd);
     }
 
-    printf("[XPMover] connection thread terminated\n");
+    MVLOG_INFO("connection thread terminated");
     return 0;
 }
 
 psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_callback_f on_boost_frame_callback) {
     if (!(hostname && on_boost_frame_callback)) {
-        printf("[XPMover] missing parameters to create_psx_client: hostname=%s, on_boost_frame_callback=%p\n", hostname, on_boost_frame_callback);
+        MVLOG_WARN("missing parameters to create_psx_client: hostname=%s, on_boost_frame_callback=%p", hostname, on_boost_frame_callback);
         return NULL;
     }
 
     psx_client_t *client = zmalloc(sizeof(psx_client_t));
     if (!client) {
-        printf("[XPMover] failed to allocate PSX client instance\n");
+        MVLOG_WARN("failed to allocate PSX client instance");
         return NULL;
     }
 
     client->hostname = copy_string(hostname);
     if (!client->hostname) {
-        printf("[XPMover] failed to copy hostname to PSX client\n");
+        MVLOG_WARN("failed to copy hostname to PSX client");
         goto error;
     }
 
@@ -260,13 +242,13 @@ psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_cal
     client->on_boost_frame_callback = on_boost_frame_callback;
 
     if (mtx_init(&client->mutex, mtx_plain) != thrd_success) {
-        printf("[XPMover] failed to create mutex for PSX client\n");
+        MVLOG_WARN("failed to create mutex for PSX client");
         goto error;
     }
     client->has_mutex = true;
 
     if (thrd_create(&client->thread, run_connection_loop, client) != thrd_success) {
-        printf("[XPMover] failed to create connection thread for PSX client\n");
+        MVLOG_WARN("failed to create connection thread for PSX client");
         goto error;
     }
     client->has_thread = true;
@@ -289,7 +271,7 @@ error:
 
 bool destroy_psx_client(psx_client_t *client) {
     if (!client) {
-        printf("[XPMover] attempted to destroy NULL PSX client\n");
+        MVLOG_WARN("attempted to destroy NULL PSX client");
         return true;
     }
 
@@ -297,7 +279,7 @@ bool destroy_psx_client(psx_client_t *client) {
     client->should_shutdown = true;
     if (client->has_mutex) {
         if (mtx_lock(&client->mutex) != thrd_success) {
-            printf("[XPMover] failed to lock mutex to shutdown connection thread\n");
+            MVLOG_WARN("failed to lock mutex to shutdown connection thread");
             return false;
         }
 
@@ -305,10 +287,10 @@ bool destroy_psx_client(psx_client_t *client) {
     }
 
     if (client->has_thread) {
-        printf("[XPMover] joining connection thread\n");
+        MVLOG_DEBUG("joining connection thread");
 
         if (thrd_join(client->thread, (int*) NULL) != thrd_success) {
-            printf("[XPMover] failed to join connection thread\n");
+            MVLOG_WARN("failed to join connection thread");
             return false;
         }
     }
