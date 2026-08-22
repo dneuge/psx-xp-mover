@@ -18,7 +18,7 @@
 
 #include "_buildinfo.h"
 
-#define PLUGIN_NAME "PSX XP Mover"
+#define PLUGIN_NAME "PSX/XP Mover"
 #define DATAREF_EXPOSED_STRING_LENGTH (256)
 
 // TODO: track full timestamp of last received boost frame and reset interpolator if at least half a second passed
