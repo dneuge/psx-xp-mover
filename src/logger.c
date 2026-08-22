@@ -91,6 +91,14 @@ void xpmover_set_min_log_level_xplane(xpmover_log_level_t level) {
     set_min_log_level(&min_log_level_xplane, level);
 }
 
+xpmover_log_level_t xpmover_get_min_log_level_console() {
+    return min_log_level_console;
+}
+
+xpmover_log_level_t xpmover_get_min_log_level_xplane() {
+    return min_log_level_xplane;
+}
+
 bool xpmover_is_log_level_enabled(xpmover_log_level_t level) {
     return level >= MVLOG_COMPILED_MIN_LOG_LEVEL && (level >= min_log_level_xplane || level >= min_log_level_console);
 }

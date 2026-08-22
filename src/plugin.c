@@ -115,6 +115,12 @@ static XPLMDataRef dataref_average_psx_time_difference = NULL;
 const char dataref_name_interpolation_time_source[] = "xpmover/interpolation_time_source";
 static XPLMDataRef dataref_interpolation_time_source = NULL;
 
+const char dataref_name_log_level_console[] = "xpmover/logging/console_level";
+static XPLMDataRef dataref_log_level_console = NULL;
+
+const char dataref_name_log_level_xplane[] = "xpmover/logging/xplane_level";
+static XPLMDataRef dataref_log_level_xplane = NULL;
+
 #define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
@@ -237,6 +243,11 @@ static int cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
 #define DATAREF_EDITOR_PLUGIN_NAME "xplanesdk.examples.DataRefEditor"
 #define DATAREF_EDITOR_MSG_ADD_DATAREF (0x01000000)
 static XPLMPluginID dataref_editor_plugin_id = XPLM_NO_PLUGIN_ID;
+
+#define INVALID_LOG_LEVEL (0)
+
+typedef xpmover_log_level_t (*get_log_level_f)();
+typedef void (*set_log_level_f)(xpmover_log_level_t level);
 
 static double get_millis_rtc() {
     struct timespec ts = {0};
@@ -464,6 +475,39 @@ static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, i
     return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
 }
 
+static bool register_blob_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatab_f inReadData, void *inReadRefcon, XPLMSetDatab_f inWriteData, void *inWriteRefcon) {
+    if (!inDataName) {
+        MVLOG_WARN("tried to register nameless dataref");
+        return false;
+    }
+
+    if (!dest) {
+        MVLOG_WARN("tried to register dataref %s without destination", inDataName);
+        return false;
+    }
+
+    if (!inReadData || !inWriteData) {
+        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
+        return false;
+    }
+
+    *dest = XPLMRegisterDataAccessor(
+        inDataName, xplmType_Data, DATAREF_WRITABLE,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        NULL, NULL,
+        inReadData, inWriteData,
+        inReadRefcon,
+        inWriteRefcon
+    );
+
+    announce_dataref(inDataName);
+
+    return (*dest != NULL);
+}
+
 static void unregister_dataref(XPLMDataRef *dataref) {
     if (!dataref) {
         return;
@@ -487,6 +531,90 @@ static bool expose_bool_as_dataref(XPLMDataRef *dest, const char *dataref_name, 
         return false;
     }
     return register_int_dataref(dest, dataref_name, get_bool, value_ref, set_bool, value_ref);
+}
+
+static char log_level_to_char(xpmover_log_level_t level) {
+    switch (level) {
+        case MVLOG_LEVEL_ERROR: return 'E';
+        case MVLOG_LEVEL_WARN:  return 'W';
+        case MVLOG_LEVEL_INFO:  return 'I';
+        case MVLOG_LEVEL_DEBUG: return 'D';
+        case MVLOG_LEVEL_TRACE: return 'T';
+        default:                return '?';
+    }
+}
+
+static xpmover_log_level_t char_to_log_level(char ch) {
+    switch (ch) {
+        case 'E': return MVLOG_LEVEL_ERROR;
+        case 'W': return MVLOG_LEVEL_WARN;
+        case 'I': return MVLOG_LEVEL_INFO;
+        case 'D': return MVLOG_LEVEL_DEBUG;
+        case 'T': return MVLOG_LEVEL_TRACE;
+        default:  return INVALID_LOG_LEVEL;
+    }
+}
+
+static int dataref_get_log_level(void *inRefcon, void *outValue, int inOffset, int inMaxLength) {
+    get_log_level_f get_log_level = inRefcon;
+    if (!get_log_level) {
+        MVLOG_WARN("dataref_get_log_level called without inRefcon");
+        return 0;
+    }
+
+    if (!outValue) {
+        // caller requests length of array which is always 1 for log levels
+        return 1;
+    }
+
+    if (inMaxLength < 1) {
+        // we have been asked not to copy anything
+        return 0;
+    }
+
+    if (inOffset != 0) {
+        // log levels are represented as a single byte, so the requested offset must be the first byte
+        return 0;
+    }
+
+    *((char*)outValue) = log_level_to_char(get_log_level());
+
+    // indicate one byte copied
+    return 1;
+}
+
+static void dataref_set_log_level(void *inRefcon, void *inValue, int inOffset, int inLength) {
+    set_log_level_f set_log_level = inRefcon;
+    if (!set_log_level) {
+        MVLOG_WARN("dataref_set_log_level called without inRefcon");
+        return;
+    }
+
+    if (!inValue || (inLength < 1)) {
+        // caller did not provide actual data to set
+        return;
+    }
+
+    char ch = ((char*)inValue)[inOffset];
+    xpmover_log_level_t level = char_to_log_level(ch);
+    if (level == INVALID_LOG_LEVEL) {
+        MVLOG_WARN("received request to set unknown log level (ch=0x%02X)", level);
+        return;
+    }
+
+    set_log_level(level);
+}
+
+static bool expose_log_level_as_dataref(XPLMDataRef *dest, const char *dataref_name, get_log_level_f get_log_level, set_log_level_f set_log_level) {
+    if (!get_log_level || !set_log_level) {
+        MVLOG_WARN("tried to expose %s with NULL references", dataref_name);
+        return false;
+    }
+    return register_blob_dataref(
+        dest, dataref_name,
+        dataref_get_log_level, get_log_level,
+        dataref_set_log_level, set_log_level
+    );
 }
 
 static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_millis, int reference_millis_part, int minimum_age_millis, int maximum_age_millis) {
@@ -694,6 +822,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_double_as_dataref(&dataref_average_psx_time_difference, dataref_name_average_psx_time_difference, &average_psx_time_difference);
         success &= expose_bool_as_dataref(&dataref_interpolation_compensate_time_difference, dataref_name_interpolation_compensate_time_difference, &interpolation_compensate_time_difference);
         success &= expose_int_as_dataref(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
+        success &= expose_log_level_as_dataref(&dataref_log_level_console, dataref_name_log_level_console, xpmover_get_min_log_level_console, xpmover_set_min_log_level_console);
+        success &= expose_log_level_as_dataref(&dataref_log_level_xplane, dataref_name_log_level_xplane, xpmover_get_min_log_level_xplane, xpmover_set_min_log_level_xplane);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             MVLOG_WARN("failed to register datarefs");
@@ -1183,6 +1313,8 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_average_psx_time_difference);
     unregister_dataref(&dataref_interpolation_compensate_time_difference);
     unregister_dataref(&dataref_interpolation_time_source);
+    unregister_dataref(&dataref_log_level_xplane);
+    unregister_dataref(&dataref_log_level_console);
 
     if (probe) {
         XPLMDestroyProbe(probe);

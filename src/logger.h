@@ -59,6 +59,9 @@ void xpmover_log(xpmover_log_level_t level, const char *format, ...);
 void xpmover_set_min_log_level_console(xpmover_log_level_t level);
 void xpmover_set_min_log_level_xplane(xpmover_log_level_t level);
 
+xpmover_log_level_t xpmover_get_min_log_level_console();
+xpmover_log_level_t xpmover_get_min_log_level_xplane();
+
 bool xpmover_is_log_level_enabled(xpmover_log_level_t level);
 
 #if (MVLOG_COMPILED_MIN_LOG_LEVEL <= MVLOG_LEVEL_TRACE)
