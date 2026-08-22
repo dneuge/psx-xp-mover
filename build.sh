@@ -11,6 +11,8 @@ src_dir="${script_dir}/src"
 build_dir="${script_dir}/build"
 release_dir="${script_dir}/release"
 
+build_info_path="${src_dir}/_buildinfo.h"
+
 function die {
     echo $@
     exit 1
@@ -25,6 +27,43 @@ mkdir -p "${build_dir}"
 
 [[ -d "${release_dir}" ]] && rm -Rf "${release_dir}"
 mkdir -p "${release_dir}"
+
+## GENERATE BUILD INFO FILE
+if [[ "${XPMOVER_BUILD_REF:-}" != "" ]]; then
+    echo "!! Build version reference has been overridden to: ${XPMOVER_BUILD_REF}"
+elif [[ ! -d .git ]]; then
+    echo "!! Building without git repository, build version reference will be missing"
+else
+    XPMOVER_BUILD_REF="$(git rev-parse HEAD)"
+
+    tag="$(git describe --tags --exact-match 2>/dev/null || echo -n)"
+    if [[ "$tag" != "" ]]; then
+        XPMOVER_BUILD_REF="${tag}@${XPMOVER_BUILD_REF}"
+    fi
+
+    if [[ "$(git status --porcelain)" != "" ]]; then
+        XPMOVER_BUILD_REF="${XPMOVER_BUILD_REF}(modified)"
+    fi
+fi
+
+cat >"${build_info_path}" <<EOF
+#ifndef XPMOVER__BUILDINFO_H
+#define XPMOVER__BUILDINFO_H
+
+#define XPMOVER_VERSION "${XPMOVER_VERSION:-dev}"
+#define XPMOVER_BUILD_ID "${XPMOVER_BUILD_ID:-}"
+#define XPMOVER_BUILD_REF "${XPMOVER_BUILD_REF:-}"
+#define XPMOVER_BUILD_TARGET "${XPLANE_TARGET} ${BUILD_TARGET} ${BUILD_SYSTEM}"
+#define XPMOVER_BUILD_TIME "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+#endif //XPMOVER__BUILDINFO_H
+EOF
+
+echo
+echo "------ BUILD INFO FILE: ${build_info_path}"
+cat "${build_info_path}"
+echo "------ END OF BUILD INFO FILE"
+echo
 
 ## BUILD
 cd "${build_dir}"

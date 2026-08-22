@@ -16,6 +16,11 @@
 #include "psx.h"
 #include "utils.h"
 
+#include "_buildinfo.h"
+
+#define PLUGIN_NAME "PSX XP Mover"
+#define DATAREF_EXPOSED_STRING_LENGTH (256)
+
 // TODO: track full timestamp of last received boost frame and reset interpolator if at least half a second passed
 
 // forward-declaration to roll back partial initialization when XPluginEnable() fails
@@ -120,6 +125,22 @@ static XPLMDataRef dataref_log_level_console = NULL;
 
 const char dataref_name_log_level_xplane[] = "xpmover/logging/xplane_level";
 static XPLMDataRef dataref_log_level_xplane = NULL;
+
+const char dataref_name_plugin_version[] = "xpmover/plugin/version";
+static XPLMDataRef dataref_plugin_version = NULL;
+
+const char dataref_name_plugin_build_id[] = "xpmover/plugin/build_id";
+static XPLMDataRef dataref_plugin_build_id = NULL;
+
+const char dataref_name_plugin_build_ref[] = "xpmover/plugin/build_ref";
+static XPLMDataRef dataref_plugin_build_ref = NULL;
+
+const char dataref_name_plugin_build_target[] = "xpmover/plugin/build_target";
+static XPLMDataRef dataref_plugin_build_target = NULL;
+
+const char dataref_name_plugin_build_time[] = "xpmover/plugin/build_time";
+static XPLMDataRef dataref_plugin_build_time = NULL;
+
 
 #define DATAREF_WRITABLE (1)
 
@@ -486,8 +507,8 @@ static bool register_blob_dataref(XPLMDataRef *dest, const char *inDataName, XPL
         return false;
     }
 
-    if (!inReadData || !inWriteData) {
-        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
+    if (!inReadData) {
+        MVLOG_WARN("tried to register dataref %s without read function", inDataName);
         return false;
     }
 
@@ -614,6 +635,53 @@ static bool expose_log_level_as_dataref(XPLMDataRef *dest, const char *dataref_n
         dest, dataref_name,
         dataref_get_log_level, get_log_level,
         dataref_set_log_level, set_log_level
+    );
+}
+
+static int dataref_get_string(void *inRefcon, void *outValue, int inOffset, int inMaxLength) {
+    char *s = inRefcon;
+    if (!s) {
+        MVLOG_WARN("dataref_get_string called without inRefcon");
+        return 0;
+    }
+
+    size_t actual_length = strlen(s);
+
+    if (!outValue) {
+        // caller requests length of array
+        return DATAREF_EXPOSED_STRING_LENGTH;
+    }
+
+    if (inMaxLength < 1) {
+        // we have been asked not to copy anything
+        return 0;
+    }
+
+    if (inOffset < 0 || inOffset > (DATAREF_EXPOSED_STRING_LENGTH-1)) {
+        // invalid offset
+        return 0;
+    }
+
+    char *out = (char*)outValue;
+    size_t max_copy = MIN(inMaxLength, DATAREF_EXPOSED_STRING_LENGTH);
+    memset(&out[inOffset], 0, max_copy);
+    ssize_t num_copy = MIN(actual_length, max_copy) - inOffset;
+    if (num_copy > 0) {
+        strncpy(&out[inOffset], &s[inOffset], num_copy);
+    }
+
+    return (int) max_copy;
+}
+
+static bool expose_string_as_dataref_readonly(XPLMDataRef *dest, const char *dataref_name, char *s) {
+    if (!s) {
+        MVLOG_WARN("tried to expose %s with NULL references", dataref_name);
+        return false;
+    }
+    return register_blob_dataref(
+        dest, dataref_name,
+        dataref_get_string, s,
+        NULL, NULL
     );
 }
 
@@ -824,6 +892,11 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_int_as_dataref(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
         success &= expose_log_level_as_dataref(&dataref_log_level_console, dataref_name_log_level_console, xpmover_get_min_log_level_console, xpmover_set_min_log_level_console);
         success &= expose_log_level_as_dataref(&dataref_log_level_xplane, dataref_name_log_level_xplane, xpmover_get_min_log_level_xplane, xpmover_set_min_log_level_xplane);
+        success &= expose_string_as_dataref_readonly(&dataref_plugin_version, dataref_name_plugin_version, XPMOVER_VERSION);
+        success &= expose_string_as_dataref_readonly(&dataref_plugin_build_id, dataref_name_plugin_build_id, XPMOVER_BUILD_ID);
+        success &= expose_string_as_dataref_readonly(&dataref_plugin_build_ref, dataref_name_plugin_build_ref, XPMOVER_BUILD_REF);
+        success &= expose_string_as_dataref_readonly(&dataref_plugin_build_target, dataref_name_plugin_build_target, XPMOVER_BUILD_TARGET);
+        success &= expose_string_as_dataref_readonly(&dataref_plugin_build_time, dataref_name_plugin_build_time, XPMOVER_BUILD_TIME);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             MVLOG_WARN("failed to register datarefs");
@@ -1182,7 +1255,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
 }
 
 PLUGIN_API int XPluginStart(char *name, char *sig, char *desc) {
-    strcpy(name, "PSX XP Mover");
+    strcpy(name, PLUGIN_NAME);
     strcpy(sig, "de.energiequant.psx.xpmover");
     strcpy(desc, "Moves the aircraft according to PSX");
 
@@ -1190,7 +1263,7 @@ PLUGIN_API int XPluginStart(char *name, char *sig, char *desc) {
     xpmover_set_min_log_level_console(MVLOG_LEVEL_DEBUG);
     xpmover_set_min_log_level_xplane(MVLOG_LEVEL_INFO);
 
-    MVLOG_INFO("start"); // FIXME: show version/build info
+    MVLOG_INFO("starting " PLUGIN_NAME " version " XPMOVER_VERSION " " XPMOVER_BUILD_ID " " XPMOVER_BUILD_REF " built at " XPMOVER_BUILD_TIME " for " XPMOVER_BUILD_TARGET);
 
     return 1;
 }
@@ -1315,6 +1388,11 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_interpolation_time_source);
     unregister_dataref(&dataref_log_level_xplane);
     unregister_dataref(&dataref_log_level_console);
+    unregister_dataref(&dataref_plugin_build_id);
+    unregister_dataref(&dataref_plugin_build_ref);
+    unregister_dataref(&dataref_plugin_build_target);
+    unregister_dataref(&dataref_plugin_build_time);
+    unregister_dataref(&dataref_plugin_version);
 
     if (probe) {
         XPLMDestroyProbe(probe);
