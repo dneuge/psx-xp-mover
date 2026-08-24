@@ -62,6 +62,53 @@ Some examples of what the plugin doesn't (and can't) do:
 - X-Plane terrain elevation is not provided back into PSX \
   => terrain mismatch will be more evident in PSX than when such feedback would be provided
 
+## DataRefs
+
+The following parameters are exposed as DataRefs to X-Plane and other plugins/addons:
+
+| Name                                                   | Type         | Access\*  | Default             | Description/Meaning                                                                                                                                                 |
+|--------------------------------------------------------|--------------|-----------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `xpmover/model_offset/length`                          | double       | writable  | `28.194`            | distance (meters) between PSX flight deck reference point and X-Plane aircraft model origin along the fuselage                                                      |
+| `xpmover/model_offset/height`                          | double       | writable  | `3.8`               | height difference (meters) between PSX flight deck reference point and X-Plane aircraft model origin                                                                |
+| `xpmover/debug/spin_hdg`                               | double       | writable  | `0.0` (disabled)    | spins the aircraft if non-zero (unit: seconds per revolution); useful to check model offset                                                                         |
+| `xpmover/terrain/always_update_elevation_info`         | boolean      | writable  | `0` (false)         | if `1` (true) X-Plane terrain elevation is always probed; `0` (false) probes only if needed (close to ground)                                                       |
+| `xpmover/terrain/elevation_msl_meters`                 | double       | read-only | NaN                 | X-Plane terrain elevation above mean sea level (meters) underneath the aircraft, determined by terrain probe (NaN while unavailable)                                |
+| `xpmover/terrain/remaining_cycles`                     | integer      | read-only | `0`                 | expiration countdown to clear last probed X-Plane terrain elevation after probes are no longer needed                                                               |
+| `xpmover/terrain/blending/suspend`                     | boolean      | writable  | `0` (not suspended) | `1` (true) always applies unadjusted PSX altitude without terrain elevation blending, even while on ground                                                          |
+| `xpmover/terrain/blending/ground_contact_cycles`       | integer      | read-only | `0` (not on ground) | number of joint frame evaluation cycles PSX reported the aircraft to have ground contact (maximum is limited)                                                       |
+| `xpmover/terrain/blending/ground_contact_fraction`     | double       | read-only | `0.0`               | transition between ground/airborne: `1.0` means "long enough in ground contact", `0.0` means "long enough in flight"                                                |
+| `xpmover/terrain/blending/firm_ground_speed`           | double       | writable  | `60.0`              | approximate ground speed (knots) at which the aircraft should be firmly pinned to ground (rotation impossible)                                                      |
+| `xpmover/terrain/blending/lift_ground_speed`           | double       | writable  | `160.0`             | approximate ground speed (knots) at which the aircraft should have left ground (i.e. too fast to not have rotated)                                                  |
+| `xpmover/terrain/blending/low_speed_fraction`          | double       | read-only | `0.0`               | transition between "firm" (`1.0`) and "lift" (`0.0`) ground speeds                                                                                                  |
+| `xpmover/terrain/blending/low_speed_fraction_factor`   | double       | writable  | `0.8` (80%)         | controls the effect of `xpmover/terrain/blending/low_speed_fraction` on overall blending fraction                                                                   |
+| `xpmover/terrain/blending/elevation_blending_fraction` | double       | read-only | `0.0`               | blends between XP and PSX elevations; `1.0` fully pins to X-Plane terrain, `0.0` fully applies PSX value; smoothed output                                           |
+| `xpmover/ground_speed_calculated`                      | double       | read-only | `0.0`               | ground speed (knots) observed in X-Plane, calculated from summed distances between boost frames (Haversine great circle)                                            |
+| `xpmover/publish/ground_speed_calculated`              | boolean      | writable  | `1` (enabled)       | attempts to write calculated ground speed to generic X-Plane datarefs if enabled (`1`); does not work (X-Plane limitation)                                          |
+| `xpmover/publish/motion_vector`                        | boolean      | writable  | `1` (enabled)       | writes motion vector (`local_vx`, `local_vy`, `local_vz`) to X-Plane if enabled (`1`); may only take full effect while flight model is *active*                     |
+| `xpmover/psx/flightdeck_latitude`                      | double       | read-only | NaN                 | PSX latitude (degrees) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended          |
+| `xpmover/psx/flightdeck_longitude`                     | double       | read-only | NaN                 | PSX longitude (degress) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended         |
+| `xpmover/psx/elevation_msl_m`                          | double       | read-only | NaN                 | PSX elevation (meters) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended          |
+| `xpmover/suspend_injection`                            | boolean      | writable  | `0` (injecting)     | `1` (true) suspends all injection from PSX to X-Plane (position, orientation, motion vector, ground contact flag, ground speed), `0` reactivates injection          |
+| `xpmover/interpolate`                                  | boolean      | writable  | `1` (enabled)       | if `0` (disabled) original values from last received PSX boost frame are applied directly to X-Plane; if `1` (enabled) values get smoothed using a buffer           |
+| `xpmover/interpolation_buffer_ms`                      | double       | writable  | `50.0`              | fixed number of milliseconds to "go back in time" and interpolate between an earlier and later received PSX boost frame to smooth movement in X-Plane               |
+| `xpmover/interpolation_compensate_time_diff`           | boolean      | writable  | `1` (compensate)    | if `1`, estimated clock drift between simulators (`xpmover/avg_psx_time_diff_ms`) is attempted to be compensated on buffer interpolation; `0` disables compensation |
+| `xpmover/avg_psx_time_diff_ms`                         | double       | read-only | `0.0`               | estimated system clock difference between simulators; positive means X-Plane is ahead of PSX, negative means X-Plane is behind PSX                                  |
+| `xpmover/interpolation_time_source`                    | integer      | writable  | `1` (RTC)           | selects time source to estimate clock difference: `1` reads time from local real-time clock, `2` uses X-Plane simulation runtime                                    |
+| `xpmover/logging/console_level`                        | string\[1]   | writable  | `D` (debug)         | lowest log level to print to console (stdout): `E` Error, `W` Warning, `I` Info, `D` Debug, `T` Trace                                                               |
+| `xpmover/logging/xplane_level`                         | string\[1]   | writable  | `I` (informational) | lowest log level to emit to X-Plane log file: `E` Error, `W` Warning, `I` Info, `D` Debug, `T` Trace                                                                |
+| `xpmover/plugin/version`                               | string\[256] | read-only | *plugin version*    | indicates the currently running plugin version, unversioned builds identify as `dev`                                                                                |
+| `xpmover/plugin/build_id`                              | string\[256] | read-only | *build number*      | ID of CI build that produced the plugin binary; empty if produced without CI                                                                                        |
+| `xpmover/plugin/build_ref`                             | string\[256] | read-only | *Git revision*      | revision, tag and modification status to correlate build to Git history                                                                                             |
+| `xpmover/plugin/build_target`                          | string\[256] | read-only | *build target*      | information about targeted X-Plane version, system and compiler                                                                                                     |
+| `xpmover/plugin/build_time`                            | string\[256] | read-only | *build timestamp*   | date and time the plugin was built at                                                                                                                               |
+
+\*) Access column shows intended access only. Read-only marked DataRefs may be still be exposed writable but should not be manipulated by other addons. Manipulation of DataRefs not marked as writable may only be temporary and have no effect.
+
+Note on types:
+
+- booleans are published as integers, `0` means `false`, `1` means `true`
+- strings are published as "data" (byte) arrays, terminated by either maximum length or NUL
+
 ## License
 
 All sources and original files of this project are provided under [MIT license](LICENSE.md), unless declared otherwise
