@@ -142,6 +142,7 @@ const char dataref_name_plugin_build_time[] = "xpmover/plugin/build_time";
 static XPLMDataRef dataref_plugin_build_time = NULL;
 
 
+#define DATAREF_READONLY (0)
 #define DATAREF_WRITABLE (1)
 
 typedef int xpint_t;
@@ -513,7 +514,7 @@ static bool register_blob_dataref(XPLMDataRef *dest, const char *inDataName, XPL
     }
 
     *dest = XPLMRegisterDataAccessor(
-        inDataName, xplmType_Data, DATAREF_WRITABLE,
+        inDataName, xplmType_Data, inWriteData ? DATAREF_WRITABLE : DATAREF_READONLY,
         NULL, NULL,
         NULL, NULL,
         NULL, NULL,
