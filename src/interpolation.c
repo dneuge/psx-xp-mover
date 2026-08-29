@@ -183,7 +183,7 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
     }
     MVLOG_TRACE("time check T%02d %03d => time_to_target_frame=%8.6fms", target_frame_index, target_frame->timestamp_millis_part, time_to_target_frame);
     if (time_to_target_frame > MAX_INTERPOLATOR_FRAME_TIME_DIFF_MILLIS) {
-        MVLOG_WARN("max interpolator frame time difference exceeded: %.6f (off by %.2fms)", time_to_target_frame, (1000-time_to_target_frame));
+        MVLOG_DEBUG("max interpolator frame time difference exceeded: %.6f (off by %.2fms)", time_to_target_frame, (1000-time_to_target_frame));
         return NAN;
     }
 
