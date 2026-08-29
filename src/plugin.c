@@ -612,12 +612,18 @@ static void dataref_set_log_level(void *inRefcon, void *inValue, int inOffset, i
         return;
     }
 
-    if (!inValue || (inLength < 1)) {
-        // caller did not provide actual data to set
+    if (!inValue) {
+        MVLOG_WARN("dataref_set_log_level called without inValue");
         return;
     }
 
-    char ch = ((char*)inValue)[inOffset];
+    // log levels are represented by just a single character, hence offset and length are fixed
+    if (inOffset != 0 || inLength != 1) {
+        MVLOG_WARN("dataref_set_log_level called with invalid inOffset=%d, inLength=%d", inOffset, inLength);
+        return;
+    }
+
+    char ch = *(char*)inValue;
     xpmover_log_level_t level = char_to_log_level(ch);
     if (level == INVALID_LOG_LEVEL) {
         MVLOG_WARN("received request to set unknown log level (ch=0x%02X)", level);
