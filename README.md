@@ -88,7 +88,7 @@ The following parameters are exposed as DataRefs to X-Plane and other plugins/ad
 | `xpmover/psx/flightdeck_latitude`                      | double       | read-only | NaN                 | PSX latitude (degrees) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended          |
 | `xpmover/psx/flightdeck_longitude`                     | double       | read-only | NaN                 | PSX longitude (degress) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended         |
 | `xpmover/psx/elevation_msl_m`                          | double       | read-only | NaN                 | PSX elevation (meters) of flight deck reference point; latest position from PSX while injection is active; transformed X-Plane coordinates while suspended          |
-| `xpmover/suspend_injection`                            | boolean      | writable  | `0` (injecting)     | `1` (true) suspends all injection from PSX to X-Plane (position, orientation, motion vector, ground contact flag, ground speed), `0` reactivates injection          |
+| `xpmover/suspend_injection`                            | boolean      | writable  | `0` (injecting)     | `1` (true) suspends all injection from PSX to X-Plane, re-enabling XP's flight model; `0` reactivates injection, taking back full control                           |
 | `xpmover/interpolate`                                  | boolean      | writable  | `1` (enabled)       | if `0` (disabled) original values from last received PSX boost frame are applied directly to X-Plane; if `1` (enabled) values get smoothed using a buffer           |
 | `xpmover/interpolation_buffer_ms`                      | double       | writable  | `50.0`              | fixed number of milliseconds to "go back in time" and interpolate between an earlier and later received PSX boost frame to smooth movement in X-Plane               |
 | `xpmover/interpolation_compensate_time_diff`           | boolean      | writable  | `1` (compensate)    | if `1`, estimated clock drift between simulators (`xpmover/avg_psx_time_diff_ms`) is attempted to be compensated on buffer interpolation; `0` disables compensation |
@@ -109,6 +109,15 @@ Note on types:
 
 - booleans are published as integers, `0` means `false`, `1` means `true`
 - strings are published as "data" (byte) arrays, terminated by either maximum length or NUL
+
+### Suspending injection to re-enable X-Plane's flight model
+
+While the plugin is enabled, it deactivates X-Plane's flight model in order to position the aircraft exactly as
+indicated by PSX. DataRef `xpmover/suspend_injection` can be used to return control to X-Plane. While injection is
+suspended, flightdeck position DataRefs no longer reflect data received from PSX, instead they are also "reversed" to
+indicate the position of the flightdeck as present in X-Plane. An external tool is required to make use of that feature.
+The upcoming virtual cockpit bridge uses that feature to steer PSX while a push-back truck
+(via [BetterPushback](https://codeberg.org/skiselkov/BetterPushbackC)) is connected in X-Plane.
 
 ## Disclaimer
 
