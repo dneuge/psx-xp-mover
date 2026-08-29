@@ -46,12 +46,41 @@
 #define MAX_TCP_PORT (65535)
 #define MAX_CONNECTION_HOSTNAME_LENGTH (255)
 
+#define IPV6_ADDRESS_MIN_LENGTH (3) /* shortest valid IPv6 address would be a single character and a placeholder (e.g. ::1) */
+
 bool is_valid_tcp_port(int port) {
     return (port > 0) && (port <= MAX_TCP_PORT);
 }
 
 static inline bool is_valid_hostname_char(char ch) {
     return ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-');
+}
+
+static inline bool may_be_ipv6_address(char *s) {
+    // NOTE: this is not a real validity check, it just makes sure that valid IPv6 addresses pass the hostname check
+    //       but it does not catch invalid syntax such as multiple :: placeholders or missing segment delimiters and
+    //       does not even validate number of segments
+
+    size_t len = strlen(s);
+    if (len < IPV6_ADDRESS_MIN_LENGTH) {
+        return false;
+    }
+
+    for (int i=0; i<len; i++) {
+        char ch = s[i];
+
+        if (ch == '%') {
+            // delimiter for network interface names; allow any content that follows, must only appear after address
+            return i > IPV6_ADDRESS_MIN_LENGTH;
+        }
+
+        bool valid_char = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') || ch == ':';
+        if (!valid_char) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool is_valid_hostname(char *s) {
@@ -62,6 +91,11 @@ bool is_valid_hostname(char *s) {
     size_t len = strlen(s);
     if (len < 1 || len > MAX_CONNECTION_HOSTNAME_LENGTH) {
         return false;
+    }
+
+    // allow everything that looks like it could be an IPv6 address to pass
+    if (may_be_ipv6_address(s)) {
+        return true;
     }
 
     bool prev_dot = false;
