@@ -226,6 +226,11 @@ psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_cal
         return NULL;
     }
 
+    if (!is_valid_tcp_port(port)) {
+        MVLOG_WARN("invalid port number: %d", port);
+        return NULL;
+    }
+
     psx_client_t *client = zmalloc(sizeof(psx_client_t));
     if (!client) {
         MVLOG_WARN("failed to allocate PSX client instance");

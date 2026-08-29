@@ -21,6 +21,14 @@
 #define PLUGIN_NAME "PSX/XP Mover"
 #define DATAREF_EXPOSED_STRING_LENGTH (256)
 
+#define MAX_CONNECTION_HOSTNAME_LENGTH MIN(255, DATAREF_EXPOSED_STRING_LENGTH)
+#define CONNECTION_HOSTNAME_SIZE MAX(MAX_CONNECTION_HOSTNAME_LENGTH+1, DATAREF_EXPOSED_STRING_LENGTH+1)
+static char connection_hostname[CONNECTION_HOSTNAME_SIZE] = {0,};
+static int connection_port = -1;
+
+#define DEFAULT_HOSTNAME "localhost"
+#define DEFAULT_PORT 10749
+
 // TODO: track full timestamp of last received boost frame and reset interpolator if at least half a second passed
 
 // forward-declaration to roll back partial initialization when XPluginEnable() fails
@@ -141,6 +149,11 @@ static XPLMDataRef dataref_plugin_build_target = NULL;
 const char dataref_name_plugin_build_time[] = "xpmover/plugin/build_time";
 static XPLMDataRef dataref_plugin_build_time = NULL;
 
+const char dataref_name_connection_hostname[] = "xpmover/connection/hostname";
+static XPLMDataRef dataref_connection_hostname = NULL;
+
+const char dataref_name_connection_port[] = "xpmover/connection/port";
+static XPLMDataRef dataref_connection_port = NULL;
 
 #define DATAREF_READONLY (0)
 #define DATAREF_WRITABLE (1)
@@ -497,6 +510,14 @@ static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, i
     return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
 }
 
+static bool expose_int_as_dataref_delegated(XPLMDataRef *dest, const char *dataref_name, int *value_ref, XPLMSetDatai_f setter) {
+    if (!value_ref) {
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
+        return false;
+    }
+    return register_int_dataref(dest, dataref_name, get_int, value_ref, setter, value_ref);
+}
+
 static bool register_blob_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatab_f inReadData, void *inReadRefcon, XPLMSetDatab_f inWriteData, void *inWriteRefcon) {
     if (!inDataName) {
         MVLOG_WARN("tried to register nameless dataref");
@@ -690,6 +711,130 @@ static bool expose_string_as_dataref_readonly(XPLMDataRef *dest, const char *dat
         dataref_get_string, s,
         NULL, NULL
     );
+}
+
+static bool expose_string_as_dataref_delegated(XPLMDataRef *dest, const char *dataref_name, char *s, XPLMSetDatab_f setter) {
+    if (!s) {
+        MVLOG_WARN("tried to expose %s with NULL references", dataref_name);
+        return false;
+    }
+    return register_blob_dataref(
+        dest, dataref_name,
+        dataref_get_string, s,
+        setter, s
+    );
+}
+
+static bool recreate_psx_client(char *hostname, int port) {
+    // NOTE: not protected by mutex; must only be called from X-Plane context
+
+    MVLOG_DEBUG("recreate_psx_client hostname=\"%s\", port=%d", hostname, port);
+    if (!is_valid_tcp_port(port)) {
+        MVLOG_WARN("invalid TCP port %d, unable to change PSX host; keeping old connection", port);
+        return false;
+    }
+    if (!is_valid_hostname(hostname) || strlen(hostname) > MAX_CONNECTION_HOSTNAME_LENGTH) {
+        MVLOG_WARN("invalid hostname \"%s\", unable to change PSX host; keeping old connection", hostname);
+        return false;
+    }
+
+    if (psx_client) {
+        if (destroy_psx_client(psx_client)) {
+            psx_client = NULL;
+        } else {
+            MVLOG_WARN("PSX client could not be destroyed, not applying new connection details; may require sim restart to solve");
+            return false;
+        }
+    }
+
+    bool can_revert = is_valid_tcp_port(connection_port) && is_valid_hostname(connection_hostname);
+
+    psx_client = create_psx_client(hostname, port, on_boost_frame_received);
+    if (psx_client) {
+        // successfully created; store active connection info
+        strncpy(connection_hostname, hostname, MAX_CONNECTION_HOSTNAME_LENGTH);
+
+        connection_port = port;
+        return true;
+    }
+
+    // if we got here, client could not be created; try to restore previous host
+
+    if (!can_revert) {
+        MVLOG_ERROR("PSX client could not be created; plugin will not connect until reset");
+        return false;
+    }
+
+    MVLOG_WARN("PSX client could not be created; attempting to connect to previous host \"%s\", port %d", connection_hostname, connection_port);
+    psx_client = create_psx_client(connection_hostname, connection_port, on_boost_frame_received);
+    if (!psx_client) {
+        MVLOG_ERROR("attempt to restore previous connection failed; plugin will remain disconnected until reset");
+    }
+
+    return false;
+}
+
+static void update_port_via_dataref(void *inRefcon, int value) {
+    if (!is_valid_tcp_port(value)) {
+        MVLOG_WARN("requested port %d is invalid; ignoring", value);
+        return;
+    }
+
+    // connection_port (inRefcon) will be updated when successfully recreated; no extra handling required
+    recreate_psx_client(connection_hostname, value);
+}
+
+static void update_hostname_via_dataref(void *inRefcon, void *inValue, int inOffset, int inLength) {
+    if (!inValue) {
+        MVLOG_WARN("update_hostname_via_dataref called without inValue");
+        return;
+    }
+
+    if (inLength == 0) {
+        return;
+    }
+
+    if (inOffset < 0 || inLength < 1) {
+        MVLOG_WARN("update_hostname_via_dataref called with invalid parameters inOffset=%d, inLength=%d", inOffset, inLength);
+        return;
+    }
+
+    // copy current value to buffer for manipulation (will be set active only if client could be created later)
+    char buffer[CONNECTION_HOSTNAME_SIZE] = {0,};
+    memcpy(buffer, connection_hostname, CONNECTION_HOSTNAME_SIZE);
+    size_t old_length = strlen(buffer);
+    if (old_length > MAX_CONNECTION_HOSTNAME_LENGTH) {
+        MVLOG_WARN("update_hostname_via_dataref old value appears to be longer than expected; aborting change");
+        return;
+    }
+    memset(&buffer[old_length], 0, CONNECTION_HOSTNAME_SIZE-old_length);
+
+    if (inOffset > old_length) {
+        MVLOG_WARN("update_hostname_via_dataref attempted to write outside of previous string, had \"%s\", got inOffset=%d", buffer, inOffset);
+        return;
+    }
+
+    // apply changes
+    int end_offset_excl = MIN(inOffset + inLength, MAX_CONNECTION_HOSTNAME_LENGTH);
+    int write_length = end_offset_excl - inOffset;
+    if (write_length <= 0) {
+        MVLOG_DEBUG("update_hostname_via_dataref nothing to write, write_length=%d", write_length);
+        return;
+    }
+    memcpy(&buffer[inOffset], inValue, write_length);
+
+    if (strcmp(connection_hostname, buffer) == 0) {
+        MVLOG_DEBUG("update_hostname_via_dataref not changed, ignoring");
+        return;
+    }
+
+    if (!is_valid_hostname(buffer)) {
+        MVLOG_WARN("update_hostname_via_dataref not a valid hostname, ignoring: \"%s\"", buffer);
+        return;
+    }
+
+    // connection_hostname (inRefcon) will be updated when successfully recreated; no extra handling required
+    recreate_psx_client(buffer, connection_port);
 }
 
 static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_millis, int reference_millis_part, int minimum_age_millis, int maximum_age_millis) {
@@ -904,6 +1049,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_ref, dataref_name_plugin_build_ref, XPMOVER_BUILD_REF);
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_target, dataref_name_plugin_build_target, XPMOVER_BUILD_TARGET);
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_time, dataref_name_plugin_build_time, XPMOVER_BUILD_TIME);
+        success &= expose_string_as_dataref_delegated(&dataref_connection_hostname, dataref_name_connection_hostname, connection_hostname, update_hostname_via_dataref);
+        success &= expose_int_as_dataref_delegated(&dataref_connection_port, dataref_name_connection_port, &connection_port, update_port_via_dataref);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             MVLOG_WARN("failed to register datarefs");
@@ -1287,7 +1434,8 @@ PLUGIN_API int XPluginEnable() {
 
     if (datarefs_initialized || psx_client || probe || probe_info
         || interpolator_flight_deck_latitude || interpolator_flight_deck_longitude || interpolator_psx_elevation_msl_meters
-        || interpolator_heading_true_degrees || interpolator_pitch_degrees || interpolator_bank_degrees) {
+        || interpolator_heading_true_degrees || interpolator_pitch_degrees || interpolator_bank_degrees
+        || strlen(connection_hostname) != 0 || connection_port >= 1) {
         MVLOG_ERROR("internal variables are already set, another instance appears to still be running; aborting startup");
         return 0;
     }
@@ -1313,8 +1461,9 @@ PLUGIN_API int XPluginEnable() {
         goto rollback;
     }
 
-    psx_client = create_psx_client("localhost", 10749, on_boost_frame_received);
-    if (!psx_client) {
+    connection_port = -1;
+    memset(connection_hostname, 0, CONNECTION_HOSTNAME_SIZE);
+    if (!recreate_psx_client(DEFAULT_HOSTNAME, DEFAULT_PORT)) {
         MVLOG_ERROR("failed to create PSX client; aborting startup");
         goto rollback;
     }
@@ -1362,6 +1511,8 @@ PLUGIN_API void XPluginDisable() {
     if (psx_client) {
         if (destroy_psx_client(psx_client)) {
             psx_client = NULL;
+            memset(connection_hostname, 0, CONNECTION_HOSTNAME_SIZE);
+            connection_port = -1;
         } else {
             MVLOG_ERROR("PSX client could not be destroyed, failed to terminate properly");
         }
@@ -1400,6 +1551,8 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_plugin_build_target);
     unregister_dataref(&dataref_plugin_build_time);
     unregister_dataref(&dataref_plugin_version);
+    unregister_dataref(&dataref_connection_hostname);
+    unregister_dataref(&dataref_connection_port);
 
     if (probe) {
         XPLMDestroyProbe(probe);

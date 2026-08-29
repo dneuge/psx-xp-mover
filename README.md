@@ -101,6 +101,8 @@ The following parameters are exposed as DataRefs to X-Plane and other plugins/ad
 | `xpmover/plugin/build_ref`                             | string\[256] | read-only | *Git revision*      | revision, tag and modification status to correlate build to Git history                                                                                             |
 | `xpmover/plugin/build_target`                          | string\[256] | read-only | *build target*      | information about targeted X-Plane version, system and compiler                                                                                                     |
 | `xpmover/plugin/build_time`                            | string\[256] | read-only | *build timestamp*   | date and time the plugin was built at                                                                                                                               |
+| `xpmover/connection/hostname`                          | string\[255] | writable  | `localhost`         | hostname of PSX instance to connect to; invalid values are filtered out, modify atomically to avoid connection attempts to unintended hosts                         |
+| `xpmover/connection/port`                              | integer      | writable  | `10749`             | TCP port number of PSX instance to connect to                                                                                                                       |
 
 \*) Access column shows intended access only. Read-only marked DataRefs may be still be exposed writable but should not be manipulated by other addons. Manipulation of DataRefs not marked as writable may only be temporary and have no effect.
 

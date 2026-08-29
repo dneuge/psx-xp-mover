@@ -24,4 +24,7 @@ ssize_t read_network(socket_t sd, char *buffer, size_t buffer_size);
 void write_network_string(socket_t sd, char *s);
 void close_network_socket(socket_t sd);
 
+bool is_valid_tcp_port(int port);
+bool is_valid_hostname(char *s);
+
 #endif //XPMOVER_NETWORK_H

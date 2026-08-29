@@ -43,6 +43,55 @@
 #define NETWORK_SEND_FLAGS (0)
 #endif
 
+#define MAX_TCP_PORT (65535)
+#define MAX_CONNECTION_HOSTNAME_LENGTH (255)
+
+bool is_valid_tcp_port(int port) {
+    return (port > 0) && (port <= MAX_TCP_PORT);
+}
+
+static inline bool is_valid_hostname_char(char ch) {
+    return ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-');
+}
+
+bool is_valid_hostname(char *s) {
+    if (!s) {
+        return false;
+    }
+
+    size_t len = strlen(s);
+    if (len < 1 || len > MAX_CONNECTION_HOSTNAME_LENGTH) {
+        return false;
+    }
+
+    bool prev_dot = false;
+
+    for (int i=0; i<len; i++) {
+        char ch = s[i];
+        if (!is_valid_hostname_char(ch)) {
+            return false;
+        }
+
+        if (ch != '.') {
+            prev_dot = false;
+        } else {
+            if (i == 0) {
+                // leading dot is invalid
+                return false;
+            }
+
+            if (prev_dot) {
+                // consecutive dots are invalid
+                return false;
+            }
+
+            prev_dot = true;
+        }
+    }
+
+    return true;
+}
+
 bool resolve_addresses(resolved_addresses_t *resolved_addresses, char *hostname) {
     // Windows seems to be the same as POSIX; for future reference:
     // https://github.com/MicrosoftDocs/sdk-api/blob/07512580a99bac226f8730c8f85344270f1beeff/sdk-api-src/content/ws2tcpip/nf-ws2tcpip-getaddrinfo.md
@@ -85,6 +134,16 @@ void free_addresses(resolved_addresses_t *resolved_addresses) {
 bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_addresses_t *resolved_addresses) {
     if (!out_sd || !hostname || !resolved_addresses) {
         MVLOG_WARN("connect_tcp_client missing parameters out_sd=%p, hostname=%p, resolved_addresses=%p", out_sd, hostname, resolved_addresses);
+        return false;
+    }
+
+    if (!is_valid_tcp_port(port)) {
+        MVLOG_WARN("connect_tcp_client called with invalid port %d", port);
+        return false;
+    }
+
+    if (!is_valid_hostname(hostname)) {
+        MVLOG_WARN("connect_tcp_client called with invalid hostname \"%s\"", hostname);
         return false;
     }
 

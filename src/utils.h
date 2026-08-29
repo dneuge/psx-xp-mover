@@ -8,6 +8,7 @@
 #define NAUTICAL_MILES_PER_METER (1.0 / METERS_PER_NAUTICAL_MILE)
 
 #define MIN(a,b) ((a<b)?a:b)
+#define MAX(a,b) ((a>b)?a:b)
 
 void* zmalloc(size_t size);
 
