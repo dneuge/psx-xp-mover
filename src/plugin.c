@@ -364,7 +364,7 @@ static void on_boost_frame_received(psx_boost_frame_t *new_boost_frame) {
                     sum += diff_receive_timestamp_millis[i];
                 }
 
-                avg_time_diff_millis = (double) sum / num_diff_receive_timestamp_millis; // TODO: expose as dataref for debugging?
+                avg_time_diff_millis = (double) sum / num_diff_receive_timestamp_millis;
                 MVLOG_TRACE("avg time diff: %8.6f", avg_time_diff_millis);
             }
         }
