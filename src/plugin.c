@@ -725,6 +725,45 @@ static bool expose_string_as_dataref_delegated(XPLMDataRef *dest, const char *da
     );
 }
 
+static void clear_previous_boost_frames() {
+    num_previous_boost_frames = 0;
+}
+
+static void clear_raw_elevation_blending_fractions() {
+    for (int i=0; i<MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS; i++) {
+        raw_elevation_blending_fractions[i] = NAN;
+    }
+    next_raw_elevation_blending_fractions_index = 0;
+    num_raw_elevation_blending_fractions = 0;
+}
+
+static void reset_psx_data() {
+    if (mtx_lock(&boost_frame_mutex) != thrd_success) {
+        MVLOG_WARN("reset_psx_data failed to lock boost frame mutex");
+        return;
+    }
+
+    clear_previous_boost_frames();
+    clear_raw_elevation_blending_fractions();
+
+    interpolator_reset(interpolator_flight_deck_latitude);
+    interpolator_reset(interpolator_flight_deck_longitude);
+    interpolator_reset(interpolator_psx_elevation_msl_meters);
+    interpolator_reset(interpolator_heading_true_degrees);
+    interpolator_reset(interpolator_pitch_degrees);
+    interpolator_reset(interpolator_bank_degrees);
+
+    mtx_unlock(&boost_frame_mutex);
+}
+
+static void on_psx_connected() {
+    reset_psx_data();
+}
+
+static void on_psx_disconnected() {
+    reset_psx_data();
+}
+
 static bool recreate_psx_client(char *hostname, int port) {
     // NOTE: not protected by mutex; must only be called from X-Plane context
 
@@ -749,7 +788,7 @@ static bool recreate_psx_client(char *hostname, int port) {
 
     bool can_revert = is_valid_tcp_port(connection_port) && is_valid_hostname(connection_hostname);
 
-    psx_client = create_psx_client(hostname, port, on_boost_frame_received);
+    psx_client = create_psx_client(hostname, port, on_boost_frame_received, on_psx_connected, on_psx_disconnected);
     if (psx_client) {
         // successfully created; store active connection info
         strncpy(connection_hostname, hostname, MAX_CONNECTION_HOSTNAME_LENGTH);
@@ -766,7 +805,7 @@ static bool recreate_psx_client(char *hostname, int port) {
     }
 
     MVLOG_WARN("PSX client could not be created; attempting to connect to previous host \"%s\", port %d", connection_hostname, connection_port);
-    psx_client = create_psx_client(connection_hostname, connection_port, on_boost_frame_received);
+    psx_client = create_psx_client(connection_hostname, connection_port, on_boost_frame_received, on_psx_connected, on_psx_disconnected);
     if (!psx_client) {
         MVLOG_ERROR("attempt to restore previous connection failed; plugin will remain disconnected until reset");
     }
@@ -905,10 +944,6 @@ static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_milli
     return NULL;
 }
 
-static void clear_previous_boost_frames() {
-    num_previous_boost_frames = 0;
-}
-
 static void record_boost_frame(psx_boost_frame_t *frame) {
     int index = (previous_boost_frame_index + 1) % MAX_NUM_PREVIOUS_BOOST_FRAMES;
     previous_boost_frames[index] = *frame;
@@ -916,14 +951,6 @@ static void record_boost_frame(psx_boost_frame_t *frame) {
         num_previous_boost_frames++;
     }
     previous_boost_frame_index = index;
-}
-
-static void clear_raw_elevation_blending_fractions() {
-    for (int i=0; i<MAX_NUM_RAW_ELEVATION_BLENDING_FRACTIONS; i++) {
-        raw_elevation_blending_fractions[i] = NAN;
-    }
-    next_raw_elevation_blending_fractions_index = 0;
-    num_raw_elevation_blending_fractions = 0;
 }
 
 static void record_raw_elevation_blending_fraction(double raw_elevation_blending_fraction) {
@@ -1443,7 +1470,7 @@ PLUGIN_API int XPluginEnable() {
     // prevent dummy/outdated data being applied before we receive the first PSX frame
     boost_frame_applied = true;
 
-    if (mtx_init(&boost_frame_mutex, mtx_plain) != thrd_success) {
+    if (mtx_init(&boost_frame_mutex, mtx_plain | mtx_recursive) != thrd_success) {
         MVLOG_ERROR("failed to initialize boost frame mutex; aborting startup");
         return 0;
     }
@@ -1482,8 +1509,7 @@ PLUGIN_API int XPluginEnable() {
     }
 
     cycles_to_override_plane_path = INIT_CYCLES_TO_OVERRIDE_PLANE_PATH;
-    clear_previous_boost_frames(); // TODO: also clear on PSX reconnect
-    clear_raw_elevation_blending_fractions(); // TODO: also clear on PSX reconnect
+    reset_psx_data();
 
     flight_loop_after_flight_model_id = XPLMCreateFlightLoop(&params);
 

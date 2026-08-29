@@ -53,12 +53,16 @@ bool psx_parse_boost_frame(psx_boost_frame_t *frame, char *line);
 bool psx_recalculate_boost_frame(psx_boost_frame_t *frame);
 
 typedef void (*psx_on_boost_frame_callback_f) (psx_boost_frame_t *boost_frame);
+typedef void (*psx_on_connected_callback_f) ();
+typedef void (*psx_on_disconnected_callback_f) ();
 
 typedef struct {
     char *hostname;
     int port;
 
     psx_on_boost_frame_callback_f on_boost_frame_callback;
+    psx_on_connected_callback_f on_connected_callback;
+    psx_on_disconnected_callback_f on_disconnected_callback;
 
     mtx_t mutex;
     bool has_mutex;
@@ -70,7 +74,7 @@ typedef struct {
     bool should_shutdown;
 } psx_client_t;
 
-psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_callback_f on_boost_frame_callback);
+psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_callback_f on_boost_frame_callback, psx_on_connected_callback_f on_connected_callback, psx_on_disconnected_callback_f on_disconnected_callback);
 bool destroy_psx_client(psx_client_t *client);
 
 #endif //PSX_H

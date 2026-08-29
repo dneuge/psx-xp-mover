@@ -159,6 +159,11 @@ static int run_connection_loop(void *ref) {
         }
 
         MVLOG_INFO("connected");
+
+        if (client->on_connected_callback) {
+            client->on_connected_callback();
+        }
+
         char recv_buffer[RECV_BUFFER_SIZE] = {0,};
         char line_buffer[LINE_BUFFER_SIZE] = {0,};
         char *line_buffer_write_cursor = line_buffer;
@@ -214,13 +219,17 @@ static int run_connection_loop(void *ref) {
         MVLOG_INFO("closing connection");
         write_network_string(sd, (char*) exit_line);
         close_network_socket(sd);
+
+        if (client->on_disconnected_callback) {
+            client->on_disconnected_callback();
+        }
     }
 
     MVLOG_INFO("connection thread terminated");
     return 0;
 }
 
-psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_callback_f on_boost_frame_callback) {
+psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_callback_f on_boost_frame_callback, psx_on_connected_callback_f on_connected_callback, psx_on_disconnected_callback_f on_disconnected_callback) {
     if (!(hostname && on_boost_frame_callback)) {
         MVLOG_WARN("missing parameters to create_psx_client: hostname=%s, on_boost_frame_callback=%p", hostname, on_boost_frame_callback);
         return NULL;
@@ -245,6 +254,8 @@ psx_client_t* create_psx_client(char *hostname, int port, psx_on_boost_frame_cal
 
     client->port = port;
     client->on_boost_frame_callback = on_boost_frame_callback;
+    client->on_connected_callback = on_connected_callback;
+    client->on_disconnected_callback = on_disconnected_callback;
 
     if (mtx_init(&client->mutex, mtx_plain) != thrd_success) {
         MVLOG_WARN("failed to create mutex for PSX client");
@@ -310,6 +321,10 @@ bool destroy_psx_client(psx_client_t *client) {
     client->hostname = NULL;
 
     free_addresses(&client->resolved_addresses);
+
+    client->on_boost_frame_callback = NULL;
+    client->on_connected_callback = NULL;
+    client->on_disconnected_callback = NULL;
 
     free(client);
 

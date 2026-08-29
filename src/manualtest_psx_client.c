@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     }
 
     printf("Creating client for host %s, port %d... (when connected: press any key to exit)\n", hostname, port);
-    psx_client_t *client = create_psx_client(hostname, port, on_receive);
+    psx_client_t *client = create_psx_client(hostname, port, on_receive, NULL, NULL);
     if (!client) {
         printf("Failed to create client.\n");
         return 1;
