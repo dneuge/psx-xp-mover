@@ -611,6 +611,7 @@ static char log_level_to_char(xpmover_log_level_t level) {
         case MVLOG_LEVEL_INFO:  return 'I';
         case MVLOG_LEVEL_DEBUG: return 'D';
         case MVLOG_LEVEL_TRACE: return 'T';
+        case MVLOG_LEVEL_FINE:  return 'F';
         default:                return '?';
     }
 }
@@ -622,6 +623,7 @@ static xpmover_log_level_t char_to_log_level(char ch) {
         case 'I': return MVLOG_LEVEL_INFO;
         case 'D': return MVLOG_LEVEL_DEBUG;
         case 'T': return MVLOG_LEVEL_TRACE;
+        case 'F': return MVLOG_LEVEL_FINE;
         default:  return INVALID_LOG_LEVEL;
     }
 }
@@ -924,10 +926,10 @@ static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_milli
         previous_frame = current_frame;
         previous_frame_age_millis = current_frame_age_millis;
         is_previous_frame_too_young = is_current_frame_too_young;
-        MVLOG_TRACE("i=%d, index=%d, reference_millis_part=%d, previous_frame=%p, previous_frame_age_millis=%d, is_previous_frame_too_young=%d", i, index, reference_millis_part, previous_frame, previous_frame_age_millis, is_previous_frame_too_young);
+        MVLOG_FINE("i=%d, index=%d, reference_millis_part=%d, previous_frame=%p, previous_frame_age_millis=%d, is_previous_frame_too_young=%d", i, index, reference_millis_part, previous_frame, previous_frame_age_millis, is_previous_frame_too_young);
 
         current_frame = &(previous_boost_frames[index]);
-        psx_log_boost_frame(current_frame, MVLOG_LEVEL_TRACE);
+        psx_log_boost_frame(current_frame, MVLOG_LEVEL_FINE);
         int frame_diff_millis = reference_millis_part - current_frame->timestamp_millis_part;
         if (frame_diff_millis < 0) {
             frame_diff_millis += 1000;
@@ -939,7 +941,7 @@ static psx_boost_frame_t* find_previous_boost_frame_by_age(int *actual_age_milli
         current_frame_age_millis += frame_diff_millis;
         is_current_frame_too_young = (current_frame_age_millis < minimum_age_millis);
         is_current_frame_too_old = (current_frame_age_millis > maximum_age_millis);
-        MVLOG_TRACE("current_frame_age_millis=%d, is_current_frame_too_young=%d, is_current_frame_too_old=%d", current_frame_age_millis, is_current_frame_too_young, is_current_frame_too_old);
+        MVLOG_FINE("current_frame_age_millis=%d, is_current_frame_too_young=%d, is_current_frame_too_old=%d", current_frame_age_millis, is_current_frame_too_young, is_current_frame_too_old);
         if (is_current_frame_too_old) {
             break;
         }
@@ -1239,8 +1241,8 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         calculated_ground_speed = meters2nauticalmiles((diff_distance_meters * MILLISECONDS_PER_HOUR) / ground_speed_reference_boost_frame_age_millis);
 
         MVLOG_TRACE("-----------[CALC GROUND SPEED]------------");
-        psx_log_boost_frame(&boost_frame_copy, MVLOG_LEVEL_TRACE);
-        psx_log_boost_frame(ground_speed_reference_boost_frame, MVLOG_LEVEL_TRACE);
+        psx_log_boost_frame(&boost_frame_copy, MVLOG_LEVEL_FINE);
+        psx_log_boost_frame(ground_speed_reference_boost_frame, MVLOG_LEVEL_FINE);
         MVLOG_TRACE("reference ground speed frame age: %d", ground_speed_reference_boost_frame_age_millis);
         MVLOG_TRACE("distance: %lf meters (%lf nm)", diff_distance_meters, meters2nauticalmiles(diff_distance_meters));
     }

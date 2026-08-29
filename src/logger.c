@@ -105,6 +105,7 @@ bool xpmover_is_log_level_enabled(xpmover_log_level_t level) {
 
 static const char* log_level_name_message_part(xpmover_log_level_t level) {
     switch (level) {
+        case MVLOG_LEVEL_FINE:  return "[FINE]  ";
         case MVLOG_LEVEL_TRACE: return "[TRACE] ";
         case MVLOG_LEVEL_DEBUG: return "[DEBUG] ";
         case MVLOG_LEVEL_INFO:  return "[INFO]  ";

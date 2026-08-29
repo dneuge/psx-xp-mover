@@ -83,17 +83,17 @@ void interpolator_reset(interpolator_t *instance) {
 }
 
 static void interpolator_dump(interpolator_t *instance) {
-#if (MVLOG_COMPILED_MIN_LOG_LEVEL <= MVLOG_LEVEL_TRACE)
-    if (!xpmover_is_log_level_enabled(MVLOG_LEVEL_TRACE)) {
+#if (MVLOG_COMPILED_MIN_LOG_LEVEL <= MVLOG_LEVEL_FINE)
+    if (!xpmover_is_log_level_enabled(MVLOG_LEVEL_FINE)) {
         return;
     }
 
     unsigned int remaining_frames = instance->num_frames;
-    MVLOG_TRACE("dump num_frames=%d", remaining_frames);
+    MVLOG_FINE("dump num_frames=%d", remaining_frames);
     int frame_index = (int) instance->frames_start;
     while (remaining_frames > 0) {
         interpolator_key_frame_t *frame = &instance->frames[frame_index];
-        MVLOG_TRACE("     #%02d %03d %f", frame_index, frame->timestamp_millis_part, frame->value);
+        MVLOG_FINE("     #%02d %03d %f", frame_index, frame->timestamp_millis_part, frame->value);
         frame_index = ipmod(frame_index + 1, MAX_INTERPOLATOR_FRAMES);
         remaining_frames--;
     }
@@ -195,8 +195,8 @@ double interpolator_calculate(interpolator_t *instance, double timestamp_millis_
         base_frame = &instance->frames[base_frame_index];
         remaining_frames--;
 
-        MVLOG_TRACE("check B%02d %03d %.6f", base_frame_index, base_frame->timestamp_millis_part, base_frame->value);
-        MVLOG_TRACE("check T%02d %03d %.6f", target_frame_index, target_frame->timestamp_millis_part, target_frame->value);
+        MVLOG_FINE("check B%02d %03d %.6f", base_frame_index, base_frame->timestamp_millis_part, base_frame->value);
+        MVLOG_FINE("check T%02d %03d %.6f", target_frame_index, target_frame->timestamp_millis_part, target_frame->value);
 
         int time_between_frames = (int) target_frame->timestamp_millis_part - (int) base_frame->timestamp_millis_part;
         if (time_between_frames < 0) {

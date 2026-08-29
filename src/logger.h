@@ -9,6 +9,7 @@
 #define MVLOG_LEVEL_INFO  31
 #define MVLOG_LEVEL_DEBUG 15
 #define MVLOG_LEVEL_TRACE 7
+#define MVLOG_LEVEL_FINE 3
 
 #ifndef MVLOG_COMPILED_MIN_LOG_LEVEL
 #define MVLOG_COMPILED_MIN_LOG_LEVEL MVLOG_LEVEL_INFO
@@ -42,6 +43,12 @@
 #define MVLOG_TRACE(format, ...) xpmover_log(MVLOG_LEVEL_TRACE, format __VA_OPT__(,) __VA_ARGS__)
 #else
 #define MVLOG_TRACE(format, ...)
+#endif
+
+#if (MVLOG_COMPILED_MIN_LOG_LEVEL <= MVLOG_LEVEL_FINE)
+#define MVLOG_FINE(format, ...) xpmover_log(MVLOG_LEVEL_FINE, format __VA_OPT__(,) __VA_ARGS__)
+#else
+#define MVLOG_FINE(format, ...)
 #endif
 
 #ifdef __cplusplus
