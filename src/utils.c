@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define NUMBER_PARSING_BUFFER_SIZE (256)
+
 void* zmalloc(size_t size) {
     void *out = malloc(size);
     if (!out) {
@@ -28,8 +30,24 @@ void* zmalloc(size_t size) {
     return out;
 }
 
+static inline bool apply_string_to_buffer(char *in, size_t in_length, char *out, size_t out_size) {
+    if (in_length >= out_size) {
+        return false;
+    }
+
+    memcpy(out, in, in_length);
+    out[in_length] = 0;
+
+    return true;
+}
+
 bool parse_long(long *dest, char *s, int length) {
-    long parsed = atol(s);
+    char buffer[NUMBER_PARSING_BUFFER_SIZE] = {0,};
+    if (!apply_string_to_buffer(s, length, buffer, NUMBER_PARSING_BUFFER_SIZE)) {
+        return false;
+    }
+
+    long parsed = atol(buffer);
 
     // turn back into a string to check if it's really parsed correctly
     int back_length = snprintf(NULL, 0, "%ld", parsed);
@@ -59,7 +77,12 @@ bool parse_long(long *dest, char *s, int length) {
 }
 
 bool parse_int(int *dest, char *s, int length) {
-    int parsed = atoi(s);
+    char buffer[NUMBER_PARSING_BUFFER_SIZE] = {0,};
+    if (!apply_string_to_buffer(s, length, buffer, NUMBER_PARSING_BUFFER_SIZE)) {
+        return false;
+    }
+
+    int parsed = atoi(buffer);
 
     // turn back into a string to check if it's really parsed correctly
     int back_length = snprintf(NULL, 0, "%d", parsed);
@@ -89,7 +112,12 @@ bool parse_int(int *dest, char *s, int length) {
 }
 
 bool parse_double(double *dest, char *s, int length) {
-    *dest = atof(s);
+    char buffer[NUMBER_PARSING_BUFFER_SIZE] = {0,};
+    if (!apply_string_to_buffer(s, length, buffer, NUMBER_PARSING_BUFFER_SIZE)) {
+        return false;
+    }
+
+    *dest = atof(buffer);
     // TODO: how to verify?
     return true;
 }
