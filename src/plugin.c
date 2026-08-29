@@ -427,13 +427,13 @@ static bool register_double_dataref(XPLMDataRef *dest, const char *inDataName, X
         return false;
     }
 
-    if (!inReadDouble || !inWriteDouble) {
-        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
+    if (!inReadDouble) {
+        MVLOG_WARN("tried to register dataref %s without read function", inDataName);
         return false;
     }
 
     *dest = XPLMRegisterDataAccessor(
-        inDataName, xplmType_Double, DATAREF_WRITABLE,
+        inDataName, xplmType_Double, inWriteDouble ? DATAREF_WRITABLE : DATAREF_READONLY,
         NULL, NULL,
         NULL, NULL,
         inReadDouble, inWriteDouble,
@@ -457,12 +457,20 @@ static void set_double(void *inRefcon, double value) {
     *((double*)inRefcon) = value;
 }
 
-static bool expose_double_as_dataref(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
+static bool expose_double_as_dataref_writable(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
     if (!value_ref) {
         MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_double_dataref(dest, dataref_name, get_double, value_ref, set_double, value_ref);
+}
+
+static bool expose_double_as_dataref_readonly(XPLMDataRef *dest, const char *dataref_name, double *value_ref) {
+    if (!value_ref) {
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
+        return false;
+    }
+    return register_double_dataref(dest, dataref_name, get_double, value_ref, NULL, NULL);
 }
 
 static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLMGetDatai_f inReadInt, void *inReadRefcon, XPLMSetDatai_f inWriteInt, void *inWriteRefcon) {
@@ -476,13 +484,13 @@ static bool register_int_dataref(XPLMDataRef *dest, const char *inDataName, XPLM
         return false;
     }
 
-    if (!inReadInt || !inWriteInt) {
-        MVLOG_WARN("tried to register dataref %s without functions", inDataName);
+    if (!inReadInt) {
+        MVLOG_WARN("tried to register dataref %s without read function", inDataName);
         return false;
     }
 
     *dest = XPLMRegisterDataAccessor(
-        inDataName, xplmType_Int, DATAREF_WRITABLE,
+        inDataName, xplmType_Int, inWriteInt ? DATAREF_WRITABLE : DATAREF_READONLY,
         inReadInt, inWriteInt,
         NULL, NULL,
         NULL, NULL,
@@ -506,12 +514,20 @@ static void set_int(void *inRefcon, int value) {
     *((int*)inRefcon) = value;
 }
 
-static bool expose_int_as_dataref(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
+static bool expose_int_as_dataref_writable(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
     if (!value_ref) {
         MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_int_dataref(dest, dataref_name, get_int, value_ref, set_int, value_ref);
+}
+
+static bool expose_int_as_dataref_readonly(XPLMDataRef *dest, const char *dataref_name, int *value_ref) {
+    if (!value_ref) {
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
+        return false;
+    }
+    return register_int_dataref(dest, dataref_name, get_int, value_ref, NULL, NULL);
 }
 
 static bool expose_int_as_dataref_delegated(XPLMDataRef *dest, const char *dataref_name, int *value_ref, XPLMSetDatai_f setter) {
@@ -572,12 +588,20 @@ static void set_bool(void *inRefcon, int value) {
     *((bool*)inRefcon) = (value != 0);
 }
 
-static bool expose_bool_as_dataref(XPLMDataRef *dest, const char *dataref_name, bool *value_ref) {
+static bool expose_bool_as_dataref_writable(XPLMDataRef *dest, const char *dataref_name, bool *value_ref) {
     if (!value_ref) {
         MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
         return false;
     }
     return register_int_dataref(dest, dataref_name, get_bool, value_ref, set_bool, value_ref);
+}
+
+static bool expose_bool_as_dataref_readonly(XPLMDataRef *dest, const char *dataref_name, bool *value_ref) {
+    if (!value_ref) {
+        MVLOG_WARN("tried to expose %s with NULL reference", dataref_name);
+        return false;
+    }
+    return register_int_dataref(dest, dataref_name, get_bool, value_ref, NULL, NULL);
 }
 
 static char log_level_to_char(xpmover_log_level_t level) {
@@ -658,7 +682,7 @@ static void dataref_set_log_level(void *inRefcon, void *inValue, int inOffset, i
     set_log_level(level);
 }
 
-static bool expose_log_level_as_dataref(XPLMDataRef *dest, const char *dataref_name, get_log_level_f get_log_level, set_log_level_f set_log_level) {
+static bool expose_log_level_as_dataref_writable(XPLMDataRef *dest, const char *dataref_name, get_log_level_f get_log_level, set_log_level_f set_log_level) {
     if (!get_log_level || !set_log_level) {
         MVLOG_WARN("tried to expose %s with NULL references", dataref_name);
         return false;
@@ -1050,34 +1074,34 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         }
 
         // now register datarefs we want to provide
-        success &= expose_double_as_dataref(&dataref_model_height_offset, dataref_name_model_height_offset, &model_height_offset_meters);
-        success &= expose_double_as_dataref(&dataref_model_length_offset, dataref_name_model_length_offset, &model_length_offset_meters);
-        success &= expose_double_as_dataref(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
-        success &= expose_bool_as_dataref(&dataref_always_update_elevation_info, dataref_name_always_update_elevation_info, &always_update_elevation_info);
-        success &= expose_double_as_dataref(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
-        success &= expose_int_as_dataref(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
-        success &= expose_bool_as_dataref(&dataref_suspend_terrain_blending, dataref_name_suspend_terrain_blending, &suspend_terrain_blending);
-        success &= expose_int_as_dataref(&dataref_ground_contact_cycles, dataref_name_ground_contact_cycles, &ground_contact_cycles);
-        success &= expose_double_as_dataref(&dataref_ground_contact_fraction, dataref_name_ground_contact_fraction, &ground_contact_fraction);
-        success &= expose_double_as_dataref(&dataref_firm_ground_speed, dataref_name_firm_ground_speed, &firm_ground_speed);
-        success &= expose_double_as_dataref(&dataref_lift_ground_speed, dataref_name_lift_ground_speed, &lift_ground_speed);
-        success &= expose_double_as_dataref(&dataref_low_speed_fraction, dataref_name_low_speed_fraction, &low_speed_fraction);
-        success &= expose_double_as_dataref(&dataref_low_speed_fraction_factor, dataref_name_low_speed_fraction_factor, &low_speed_fraction_factor);
-        success &= expose_double_as_dataref(&dataref_elevation_blending_fraction, dataref_name_elevation_blending_fraction, &elevation_blending_fraction);
-        success &= expose_double_as_dataref(&dataref_calculated_ground_speed, dataref_name_calculated_ground_speed, &calculated_ground_speed);
-        success &= expose_bool_as_dataref(&dataref_publish_ground_speed, dataref_name_publish_ground_speed, &publish_ground_speed);
-        success &= expose_bool_as_dataref(&dataref_publish_motion_vector, dataref_name_publish_motion_vector, &publish_motion_vector);
-        success &= expose_double_as_dataref(&dataref_psx_latitude, dataref_name_psx_latitude, &psx_latitude);
-        success &= expose_double_as_dataref(&dataref_psx_longitude, dataref_name_psx_longitude, &psx_longitude);
-        success &= expose_double_as_dataref(&dataref_psx_elevation, dataref_name_psx_elevation, &psx_elevation);
-        success &= expose_bool_as_dataref(&dataref_suspend_injection, dataref_name_suspend_injection, &suspend_injection);
-        success &= expose_bool_as_dataref(&dataref_interpolate, dataref_name_interpolate, &interpolate);
-        success &= expose_double_as_dataref(&dataref_interpolation_buffer_millis, dataref_name_interpolation_buffer_millis, &interpolation_buffer_millis);
-        success &= expose_double_as_dataref(&dataref_average_psx_time_difference, dataref_name_average_psx_time_difference, &average_psx_time_difference);
-        success &= expose_bool_as_dataref(&dataref_interpolation_compensate_time_difference, dataref_name_interpolation_compensate_time_difference, &interpolation_compensate_time_difference);
-        success &= expose_int_as_dataref(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
-        success &= expose_log_level_as_dataref(&dataref_log_level_console, dataref_name_log_level_console, xpmover_get_min_log_level_console, xpmover_set_min_log_level_console);
-        success &= expose_log_level_as_dataref(&dataref_log_level_xplane, dataref_name_log_level_xplane, xpmover_get_min_log_level_xplane, xpmover_set_min_log_level_xplane);
+        success &= expose_double_as_dataref_writable(&dataref_model_height_offset, dataref_name_model_height_offset, &model_height_offset_meters);
+        success &= expose_double_as_dataref_writable(&dataref_model_length_offset, dataref_name_model_length_offset, &model_length_offset_meters);
+        success &= expose_double_as_dataref_writable(&dataref_debug_spin_hdg, dataref_name_debug_spin_hdg, &debug_spin_hdg);
+        success &= expose_bool_as_dataref_writable(&dataref_always_update_elevation_info, dataref_name_always_update_elevation_info, &always_update_elevation_info);
+        success &= expose_double_as_dataref_readonly(&dataref_terrain_elevation_meters, dataref_name_terrain_elevation_meters, &terrain_elevation_meters);
+        success &= expose_int_as_dataref_readonly(&dataref_terrain_elevation_remaining_cycles, dataref_name_terrain_elevation_remaining_cycles, &terrain_elevation_remaining_cycles);
+        success &= expose_bool_as_dataref_writable(&dataref_suspend_terrain_blending, dataref_name_suspend_terrain_blending, &suspend_terrain_blending);
+        success &= expose_int_as_dataref_readonly(&dataref_ground_contact_cycles, dataref_name_ground_contact_cycles, &ground_contact_cycles);
+        success &= expose_double_as_dataref_readonly(&dataref_ground_contact_fraction, dataref_name_ground_contact_fraction, &ground_contact_fraction);
+        success &= expose_double_as_dataref_writable(&dataref_firm_ground_speed, dataref_name_firm_ground_speed, &firm_ground_speed);
+        success &= expose_double_as_dataref_writable(&dataref_lift_ground_speed, dataref_name_lift_ground_speed, &lift_ground_speed);
+        success &= expose_double_as_dataref_readonly(&dataref_low_speed_fraction, dataref_name_low_speed_fraction, &low_speed_fraction);
+        success &= expose_double_as_dataref_writable(&dataref_low_speed_fraction_factor, dataref_name_low_speed_fraction_factor, &low_speed_fraction_factor);
+        success &= expose_double_as_dataref_readonly(&dataref_elevation_blending_fraction, dataref_name_elevation_blending_fraction, &elevation_blending_fraction);
+        success &= expose_double_as_dataref_readonly(&dataref_calculated_ground_speed, dataref_name_calculated_ground_speed, &calculated_ground_speed);
+        success &= expose_bool_as_dataref_writable(&dataref_publish_ground_speed, dataref_name_publish_ground_speed, &publish_ground_speed);
+        success &= expose_bool_as_dataref_writable(&dataref_publish_motion_vector, dataref_name_publish_motion_vector, &publish_motion_vector);
+        success &= expose_double_as_dataref_readonly(&dataref_psx_latitude, dataref_name_psx_latitude, &psx_latitude);
+        success &= expose_double_as_dataref_readonly(&dataref_psx_longitude, dataref_name_psx_longitude, &psx_longitude);
+        success &= expose_double_as_dataref_readonly(&dataref_psx_elevation, dataref_name_psx_elevation, &psx_elevation);
+        success &= expose_bool_as_dataref_writable(&dataref_suspend_injection, dataref_name_suspend_injection, &suspend_injection);
+        success &= expose_bool_as_dataref_writable(&dataref_interpolate, dataref_name_interpolate, &interpolate);
+        success &= expose_double_as_dataref_writable(&dataref_interpolation_buffer_millis, dataref_name_interpolation_buffer_millis, &interpolation_buffer_millis);
+        success &= expose_double_as_dataref_readonly(&dataref_average_psx_time_difference, dataref_name_average_psx_time_difference, &average_psx_time_difference);
+        success &= expose_bool_as_dataref_writable(&dataref_interpolation_compensate_time_difference, dataref_name_interpolation_compensate_time_difference, &interpolation_compensate_time_difference);
+        success &= expose_int_as_dataref_writable(&dataref_interpolation_time_source, dataref_name_interpolation_time_source, &interpolation_time_source);
+        success &= expose_log_level_as_dataref_writable(&dataref_log_level_console, dataref_name_log_level_console, xpmover_get_min_log_level_console, xpmover_set_min_log_level_console);
+        success &= expose_log_level_as_dataref_writable(&dataref_log_level_xplane, dataref_name_log_level_xplane, xpmover_get_min_log_level_xplane, xpmover_set_min_log_level_xplane);
         success &= expose_string_as_dataref_readonly(&dataref_plugin_version, dataref_name_plugin_version, XPMOVER_VERSION);
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_id, dataref_name_plugin_build_id, XPMOVER_BUILD_ID);
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_ref, dataref_name_plugin_build_ref, XPMOVER_BUILD_REF);
@@ -1085,7 +1109,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_time, dataref_name_plugin_build_time, XPMOVER_BUILD_TIME);
         success &= expose_string_as_dataref_delegated(&dataref_connection_hostname, dataref_name_connection_hostname, connection_hostname, update_hostname_via_dataref);
         success &= expose_int_as_dataref_delegated(&dataref_connection_port, dataref_name_connection_port, &connection_port, update_port_via_dataref);
-        success &= expose_bool_as_dataref(&dataref_connection_established, dataref_name_connection_established, &connection_established);
+        success &= expose_bool_as_dataref_readonly(&dataref_connection_established, dataref_name_connection_established, &connection_established);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             MVLOG_WARN("failed to register datarefs");

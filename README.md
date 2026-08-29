@@ -66,7 +66,7 @@ Some examples of what the plugin doesn't (and can't) do:
 
 The following parameters are exposed as DataRefs to X-Plane and other plugins/addons:
 
-| Name                                                   | Type         | Access\*  | Default             | Description/Meaning                                                                                                                                                 |
+| Name                                                   | Type         | Access    | Default             | Description/Meaning                                                                                                                                                 |
 |--------------------------------------------------------|--------------|-----------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `xpmover/model_offset/length`                          | double       | writable  | `28.194`            | distance (meters) between PSX flight deck reference point and X-Plane aircraft model origin along the fuselage                                                      |
 | `xpmover/model_offset/height`                          | double       | writable  | `3.8`               | height difference (meters) between PSX flight deck reference point and X-Plane aircraft model origin                                                                |
@@ -104,8 +104,6 @@ The following parameters are exposed as DataRefs to X-Plane and other plugins/ad
 | `xpmover/connection/hostname`                          | string\[255] | writable  | `localhost`         | hostname of PSX instance to connect to; invalid values are filtered out, modify atomically to avoid connection attempts to unintended hosts                         |
 | `xpmover/connection/port`                              | integer      | writable  | `10749`             | TCP port number of PSX instance to connect to                                                                                                                       |
 | `xpmover/connection/established`                       | boolean      | read-only | `0` (not connected) | `1` (true) while connected to PSX, `0` (false) while not connected                                                                                                  |
-
-\*) Access column shows intended access only. Read-only marked DataRefs may be still be exposed writable but should not be manipulated by other addons. Manipulation of DataRefs not marked as writable may only be temporary and have no effect.
 
 Note on types:
 
