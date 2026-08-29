@@ -181,7 +181,7 @@ bool connect_tcp_client(socket_t *out_sd, char *hostname, int port, resolved_add
         return false;
     }
 
-    MVLOG_INFO("connecting to %s:%d", hostname, port);
+    MVLOG_INFO("connecting to %s, port %d", hostname, port);
 
     if (!resolve_addresses(resolved_addresses, hostname) || !(*resolved_addresses)) {
         MVLOG_WARN("address not resolved, unable to connect");
