@@ -111,6 +111,24 @@ Note on types:
 - booleans are published as integers, `0` means `false`, `1` means `true`
 - strings are published as "data" (byte) arrays, terminated by either maximum length or NUL
 
+## Disclaimer
+
+In addition to the disclaimer already present in the [MIT license](LICENSE.md) we would like to issue a few specific
+warnings:
+
+Aircraft position and orientation are subject to sudden and/or discontinuous changes. You are highly discouraged
+from using its output (i.e. any state injected to X-Plane) to drive motion platforms or other hardware interfaces as
+that could greatly increase risks of injury or damage.
+
+Even when using PSX in a certified setup, this plugin should not be used for real-world training. The project is being
+developed for recreation and thus may not qualify for professional use and could void your certification.
+In addition to the cockpit not being handled by this plugin, inaccurate representation should be expected at all times,
+including drift by interpolation or terrain blending, affecting critical flight phases in particular (takeoff,
+departure, approach, landing) as well as inaccurate depiction of ground operations (e.g. wrong acceleration and
+object clearance).
+
+As the license already states, no warranty or liability will be given; use at your own risk.
+
 ## License
 
 All sources and original files of this project are provided under [MIT license](LICENSE.md), unless declared otherwise
