@@ -62,6 +62,114 @@ Some examples of what the plugin doesn't (and can't) do:
 - X-Plane terrain elevation is not provided back into PSX \
   => terrain mismatch will be more evident in PSX than when such feedback would be provided
 
+## How to install
+
+The plugin should be installed to an *aircraft plugin directory*, not to the global plugin directory. Simply download
+and unpack a release version into the `plugins` directory of your *aircraft*, for example as
+`Aircraft/Boeing B747-400 XP11/plugins/xpmover`. The plugin has been tested with the default B744 that came with
+X-Plane 11. You probably want to create a copy of the aircraft you install this plugin to as you may also need to
+disable/delete other plugins/scripts that came with it to ensure that the plugin has full control over the aircraft
+model.
+
+## How to build/develop
+
+Please refer to the [Development Guide](DEVELOPMENT.md) for details on how to build the plugin on your own. End users
+are recommended to download a binary release version instead.
+
+## Troubleshooting
+
+Some of the following troubleshooting steps need some way to inspect and change DataRefs which requires an additional
+plugin or external tool. If you do not have anything installed yet, we recommend Laminar Research's
+[DataRefEditor](https://developer.x-plane.com/tools/datarefeditor/).
+
+Note that any changes to DataRefs do not persist and will reset when the plugin is restarted.
+
+### PSX boost frame rate
+
+For this plugin to work as expected, the boost frame output rate in PSX should be set to at least 60Hz without division.
+In PSX's Instructor Panel check Preferences/Basics and make sure to select a "Frame rate limit" option that does *not*
+include a slash. Options marked e.g. "/3" and "/2" indicate frame rate division. "60/2" limits PSX to 60Hz while boost
+frames are reduced to half of that (60Hz/2 = 30Hz). "48/3" even reduces boost frames down to just 16Hz.
+
+At time of writing (PSX version 10.192), 75Hz is the highest and the only undivided option and thus should be used when
+connecting this plugin.
+
+### Logging
+
+This plugin logs to both the X-Plane `Log.txt` file as well as to console (stdout), using `[Mover]` prefixes for all
+messages. By default, `Log.txt` receives only `INFO` level or more critical messages while console also shows `DEBUG`
+messages (first level of developer detail output). Log levels can be reconfigured as needed via `xpmover/logging`
+prefixed DataRefs (see table below for details); every lower (more detailed) level also includes all higher (less
+detailed) messages.
+
+`DEBUG` level messages may be useful to enable/check if you suspect issues with interpolation/timing. `TRACE` messages
+give further insights into internal calculations, while `FINE` messages show full state dumps and thus should only be
+activated for a very brief moment.
+
+End-users probably want to reconfigure the `xpmover/logging/xplane_level`, if needed, to read messages from `Log.txt`.
+During development, console output (`xpmover/logging/console_level`) usually is more convenient.
+
+To see console log output, simply launch the X-Plane executable from a terminal window. On Windows you need to pipe the
+output to another process to keep the process in foreground, e.g. by running `X-Plane.exe | more` in the old `cmd.exe`
+shell (not PowerShell). Windows users may find it easier to raise `xpmover/logging/xplane_level` instead, unless they
+need to observe startup messages at `DEBUG` level or below.
+
+### Interpolation issues
+
+Due to both simulators producing frames independently and additionally being subject to network/processing latency,
+interpolation is used to smooth movement between PSX boost frames. Interpolation always requires at least 2 PSX boost
+frames to be present on the X-Plane side, which at 75Hz in best case (zero latency, full frame rate) should arrive every
+13.3ms.
+
+In practice, that ideal minimum delay is impossible to achieve and maintain:
+
+- PSX usually runs with a lower than the maximum frame rate (the configuration option just sets an upper limit)
+- PSX is not a real-time application, meaning boost frames leave PSX with random small delays
+- boost frames need to pass through network layers; even when both simulators run on the same machine, that adds some small latency
+- this plugin needs to receive and (although quick) parse and store the received boost frames
+- X-Plane's flight loop callback (at least once per X-Plane render frame) is and can not be synchronized to PSX boost frame arrival times, meaning frames could arrive slightly too late for a flight loop cycle
+- running both simulators on the same machine leads to additional resource/scheduling conflicts, reducing frame rates in both applications and thus increasing delays
+
+Through experimentation, the interpolation buffer size (fixed latency to interpolated positions) was determined to
+require around 50ms for a smooth experience but the actually required value depends on system load (changing during
+flight) and general system performance.
+
+If you notice **frequent stuttering** (possibly buffer underruns), you may need to increase
+`xpmover/interpolation_buffer_ms`. `DEBUG` log messages give a clear indication of underruns, however it was not
+feasible to leave those messages enabled to be logged to X-Plane's `Log.txt` by default to avoid excessive spamming -
+you can still see those messages on console output or by temporarily changing `xpmover/logging/xplane_level` from `I` to
+`D`.
+
+If you notice a looping/sliding aircraft (severe underrun beyond 450-500ms) something may be wrong with PSX or the
+network connection between both simulators. Unfortunately, such issues cannot be detected by the plugin itself
+(PSX boost frames only identify the millisecond part of a second, making time differences beyond 450ms hard to detect).
+This may be happening particularly if general performance issues exist; see the list below on what to check.
+
+As a last resort you may want to disable interpolation by setting the `xpmover/interpolate` DataRef to `0`.
+
+### General performance
+
+General points to check if you experience high latency or severe instability with interpolation:
+
+- If you connect to another machine over an actual network, make sure to use a wired connection (LAN) instead of
+  wireless (WiFi/WLAN).
+- Avoid exchanging boost frames over the Internet; instead sync PSX instances via the "Main" port and connect to your
+  local PSX instance for Boost frames instead.
+- Fully quit all applications not related to flight simulation to reduce overall system load.
+- You may need to reduce the number of worker threads used by X-Plane by passing a `--num_workers=N` argument to the
+  X-Plane executable (replace `N` by the desired number, e.g. number of "performance core" CPU threads minus 2).
+- Avoid on-the-fly ortho-generation for X-Plane as it is known to severely impact system performance. Delegate such
+  tasks to dedicated machines or simply generate static tiles ahead of time.
+- Try if limiting X-Plane framerate improves/stabilizes overall performance by passing a `--lock_fr=N` argument to the
+  X-Plane executable (replace `N` by the desired number of frames per second, e.g. `30`).
+- If you use Windows, make sure that "game mode" is disabled (otherwise the X-Plane main process may get prioritized too
+  high, restricting all other applications, including PSX, to impossibly low CPU usage). This may require using "hacks"
+  such as [Compatibility Manager](https://github.com/nbusseneau/CompatibilityManager).
+- If you use an asymmetrical CPU check that process affinity is configured correctly; both simulators should run on
+  "performance cores" and may benefit from larger caches (e.g. Ryzen X3D). Configuration depends on your exact CPU model.
+- Try to set your CPU into a "performance" energy profile. Some CPUs (Ryzen) may only use that request as a hint, yet
+  it should be tried in case of performance issues.
+
 ## DataRefs
 
 The following parameters are exposed as DataRefs to X-Plane and other plugins/addons:

@@ -7,6 +7,8 @@
 * coordinate major changes with the maintainer/main author ahead of implementation
 * any change to dependencies or patches needs to be recorded in the [SBOM](sbom.xml)
 * only use AI according to the [AI Usage Policy](AI_USAGE_POLICY.md) or avoid it entirely
+* if you plan on contributing your changes, make sure that you have read and agree with the
+  [Contribution Guidelines](CONTRIBUTING.md) of this project
 
 ## Build prerequisites
 
