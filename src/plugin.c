@@ -25,6 +25,7 @@
 #define CONNECTION_HOSTNAME_SIZE MAX(MAX_CONNECTION_HOSTNAME_LENGTH+1, DATAREF_EXPOSED_STRING_LENGTH+1)
 static char connection_hostname[CONNECTION_HOSTNAME_SIZE] = {0,};
 static int connection_port = -1;
+static bool connection_established = false;
 
 #define DEFAULT_HOSTNAME "localhost"
 #define DEFAULT_PORT 10749
@@ -154,6 +155,9 @@ static XPLMDataRef dataref_connection_hostname = NULL;
 
 const char dataref_name_connection_port[] = "xpmover/connection/port";
 static XPLMDataRef dataref_connection_port = NULL;
+
+const char dataref_name_connection_established[] = "xpmover/connection/established";
+static XPLMDataRef dataref_connection_established = NULL;
 
 #define DATAREF_READONLY (0)
 #define DATAREF_WRITABLE (1)
@@ -757,10 +761,12 @@ static void reset_psx_data() {
 }
 
 static void on_psx_connected() {
+    connection_established = true;
     reset_psx_data();
 }
 
 static void on_psx_disconnected() {
+    connection_established = false;
     reset_psx_data();
 }
 
@@ -785,6 +791,7 @@ static bool recreate_psx_client(char *hostname, int port) {
             return false;
         }
     }
+    connection_established = false;
 
     bool can_revert = is_valid_tcp_port(connection_port) && is_valid_hostname(connection_hostname);
 
@@ -1078,6 +1085,7 @@ static float flight_loop_callback(float inElapsedSinceLastCall, float inElapsedT
         success &= expose_string_as_dataref_readonly(&dataref_plugin_build_time, dataref_name_plugin_build_time, XPMOVER_BUILD_TIME);
         success &= expose_string_as_dataref_delegated(&dataref_connection_hostname, dataref_name_connection_hostname, connection_hostname, update_hostname_via_dataref);
         success &= expose_int_as_dataref_delegated(&dataref_connection_port, dataref_name_connection_port, &connection_port, update_port_via_dataref);
+        success &= expose_bool_as_dataref(&dataref_connection_established, dataref_name_connection_established, &connection_established);
         if (!success) {
             // our own datarefs only enable external control but they are not essential to continue
             MVLOG_WARN("failed to register datarefs");
@@ -1462,7 +1470,7 @@ PLUGIN_API int XPluginEnable() {
     if (datarefs_initialized || psx_client || probe || probe_info
         || interpolator_flight_deck_latitude || interpolator_flight_deck_longitude || interpolator_psx_elevation_msl_meters
         || interpolator_heading_true_degrees || interpolator_pitch_degrees || interpolator_bank_degrees
-        || strlen(connection_hostname) != 0 || connection_port >= 1) {
+        || strlen(connection_hostname) != 0 || connection_port >= 1 || connection_established) {
         MVLOG_ERROR("internal variables are already set, another instance appears to still be running; aborting startup");
         return 0;
     }
@@ -1543,6 +1551,7 @@ PLUGIN_API void XPluginDisable() {
             MVLOG_ERROR("PSX client could not be destroyed, failed to terminate properly");
         }
     }
+    connection_established = false;
 
     unregister_dataref(&dataref_model_height_offset);
     unregister_dataref(&dataref_model_length_offset);
@@ -1579,6 +1588,7 @@ PLUGIN_API void XPluginDisable() {
     unregister_dataref(&dataref_plugin_version);
     unregister_dataref(&dataref_connection_hostname);
     unregister_dataref(&dataref_connection_port);
+    unregister_dataref(&dataref_connection_established);
 
     if (probe) {
         XPLMDestroyProbe(probe);
