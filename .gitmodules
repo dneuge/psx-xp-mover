@@ -1,0 +1,3 @@
+[submodule "tools/simple-sbom"]
+	path = tools/simple-sbom
+	url = https://codeberg.org/dneuge/simple-sbom.git
