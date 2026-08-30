@@ -41,7 +41,7 @@
             <dependency>xplane</dependency>
         </dependency>
         <dependency id="threads-macos-compat">
-            <name>C11 threads compatibility wrapper for the macOS® operating system</name>
+            <name>C11 threads compatibility wrapper for the macOS operating system</name>
             <version>216bcaa5777532ecd0a07eac440ae876cfe7f119</version>
             <website>https://github.com/dneuge/c11-threads-compat-for-macos-operating-system</website>
             <source>https://github.com/dneuge/c11-threads-compat-for-macos-operating-system.git</source>
