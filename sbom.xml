@@ -24,7 +24,7 @@
             <version>401</version>
             <source>https://developer.x-plane.com/wp-content/plugins/code-sample-generation/sdk_zip_files/XPSDK401.zip</source>
             <location>lib/XPSDK</location>
-            <method>separate</method>
+            <method>separate</method><!-- compilation on Windows and OS X may actually be "mixed" as it binds static components? -->
             <copyright license="xpsdk" years="2008">
                 <author>SandyBarbour</author>
                 <author>BenSupnik</author>
@@ -53,6 +53,21 @@
             </activation>
             <copyright license="MIT" years="2024">
                 <author>DanielNeugebauer</author>
+            </copyright>
+        </dependency>
+        <dependency id="windows-sdk">
+            <name>Windows SDK</name>
+            <!-- version as present on GitHub Action worker images
+                 oldest publicly still available version is 10.0.26100.1742 -->
+            <version>10.0.26100.0</version>
+            <website>https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads</website>
+            <website>https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads-archive</website>
+            <method>mixed</method><!-- .lib is static, .dll is dynamic, SDK does .lib and possibly some static includes -->
+            <activation>
+                <tag>target-windows</tag>
+            </activation>
+            <copyright license="EULAID:WIN10SDK.RTM.AUG_2018_en-US">
+                <author>microsoftCorp</author>
             </copyright>
         </dependency>
     </dependencies>
@@ -135,6 +150,9 @@
         <license id="xpsdk" name="X-Plane SDK License" shortName="X-Plane SDK">
             <!-- TODO: check if there is a matching standard license -->
             <copy file="lib/XPSDK/license.txt" />
+        </license>
+        <license id="EULAID:WIN10SDK.RTM.AUG_2018_en-US" name="Microsoft Software License Terms for Windows SDK for Windows 10 software" shortName="Windows 10 SDK EULA">
+            <!-- only available as part of Windows SDK downloads -->
         </license>
     </licenses>
     <trademarks>
