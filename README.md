@@ -109,7 +109,7 @@ activated for a very brief moment.
 End-users probably want to reconfigure the `xpmover/logging/xplane_level`, if needed, to read messages from `Log.txt`.
 During development, console output (`xpmover/logging/console_level`) usually is more convenient.
 
-To see console log output, simply launch the X-Plane executable from a terminal window. On Windows you need to pipe the
+To see console log output, simply launch the X-Plane executable from a terminal window. On Windows® you need to pipe the
 output to another process to keep the process in foreground, e.g. by running `X-Plane.exe | more` in the old `cmd.exe`
 shell (not PowerShell). Windows users may find it easier to raise `xpmover/logging/xplane_level` instead, unless they
 need to observe startup messages at `DEBUG` level or below.
@@ -273,4 +273,6 @@ removal from this project, depending on severity.
 
 [Aerowinx](https://aerowinx.com/) is a registered trademark of Hardy Heinlin.
 
-[X-Plane](https://www.x-plane.com/) is a registered trademark of Austin Meyer and Aerosoft.
+Microsoft and Windows are trademarks of the [Microsoft](https://www.microsoft.com/) group of companies.
+
+[X-Plane](https://www.x-plane.com/) is a registered trademark of Austin Meyer.

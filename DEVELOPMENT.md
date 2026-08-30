@@ -22,8 +22,8 @@ More details follow below.
 
 ## Recommended Environment
 
-* Linux
-* [CLion](https://www.jetbrains.com/clion/) IDE (free for non-commercial use as of 2025)
+* Linux®
+* [CLion®](https://www.jetbrains.com/clion/) IDE (free for non-commercial use as of 2025)
 * Clang (see below for other compilers)
 
 ## Build Process
@@ -41,21 +41,21 @@ Most scripts accept two optional parameters, target platform (`linux`, `windows`
 If called without those parameters, the current platform and the latest X-Plane version are being
 targeted by default.
 
-Compilation with GCC, MinGW or Visual Studio Community is blocked due to possible license violations/uncertainty.
+Compilation with GCC, MinGW or Visual Studio® Community is blocked due to possible license violations/uncertainty.
 For local development only (keeping the compilation result to yourself), you may choose to override that safety lockout
 by declaring `I_WILL_NOT_DISTRIBUTE_BUILD_RESULTS` to `True` or `1`; either as an environment variable (when using the
-included build scripts) or in your CMake toolchain configuration (when using an IDE).
+included build scripts) or in your CMake® toolchain configuration (when using an IDE).
 
 Depending on the target platform...
 
 * when targeting Linux, please build on Linux with standard build tools, CMake and Clang
-* when targeting macOS®, please build on a Mac® computer using the latest stable release of the Xcode® development suite
+* when targeting macOS, please build on a Mac computer using the latest stable release of the Xcode development suite
   and any compatible version of CMake
   * cross-building from other platforms requires original Apple SDKs/files and would violate licenses,
     no support or advice will be given and cross-builds should in general not be discussed (public discussions will be
     deleted)
-* when targeting Windows:
-  * install Git
+* when targeting Windows®:
+  * install Git®
   * Visual Studio 2022 should be used for compilation
     * When using VS under the free Community license, carefully read the license agreement. Some
       dependencies use licenses not approved by OSI, which is one of the key requirements to be able to use the
@@ -90,10 +90,16 @@ necessary in the future:
 
 ## Acknowledgments
 
+CMake is a registered trademark of Kitware, Inc.
+
 [Git](https://git-scm.com/) and the Git logo are either registered trademarks or trademarks of
 [Software Freedom Conservancy, Inc.](https://sfconservancy.org/), corporate home of the Git Project, in the
 United States and/or other countries.
 
+JetBrains and CLion are trademarks of JetBrains s.r.o.
+
+Linux® is the registered trademark of Linus Torvalds in the U.S. and other countries.
+
 Mac, macOS and Xcode are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
 
-Microsoft, Visual Studio and Windows are trademarks of the Microsoft group of companies. 
+Microsoft, Visual Studio and Windows are trademarks of the Microsoft group of companies.

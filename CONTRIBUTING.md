@@ -15,7 +15,7 @@ Before contributing code for inclusion to the main repository, please make sure 
   - basing a contribution on documentation or other (online) sources is allowed as long as you make sure to abide by the terms of use set by those sources and cite/name the original author(s) were applicable
     - when this results in a conflict to other points in these guidelines, the affected contribution needs to be considered as potentially derivative work and treated accordingly (note that e.g. including code from an external project does not necessarily violate the "own work" rule, but special care must be taken in terms of copyright and license conformity)
     - for any significant "imported" portion of code the **origin must be documented**; attempting to contribute copied code without proper attribution and clear indication of sources and licenses is a severe copyright violation
-    - documentation published by Microsoft on learn.microsoft.com is highly problematic; see the section below on how to work with it
+    - documentation published by Microsoft® on learn.microsoft.com is highly problematic; see the section below on how to work with it
   - **AI must not have been involved for authoring any part of your contribution except for allowed cases as detailed in the [AI Usage Policy](AI_USAGE_POLICY.md)**
 - all commits are made under your full real name (no aliases, no short names) and with a working email address (it must be possible to contact you under that address for the foreseeable future)
   - exceptions are only made when fixing security vulnerabilities if the reporter supplies a patch and wants to remain anonymous (but may still want to be credited under a pseudonym) - in that case the *commit* user shall be a project maintainer, indicating the original *author* (with a generic/rewritten email address, if needed) using standard Git commit mechanisms or prominently in the commit message
@@ -92,3 +92,7 @@ Additionally, check the commit history on the Git repository. Edits up to 2022 h
 ### How to deal with information about Microsoft products/APIs found on non-Microsoft sources
 
 Due to the high chance of being legally tainted, all information found regarding Microsoft products and APIs must be verified to originate from untainted sources. This includes research on the Internet to check what other sources can be found and how wide-spread (and how old) knowledge about that information is. It makes sense to start searching on Microsoft's GitHub repository mentioned above for complete official documentation published under a compatible license.
+
+## Acknowledgements
+
+Microsoft is a trademark of the [Microsoft](https://www.microsoft.com/) group of companies.

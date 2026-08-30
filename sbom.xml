@@ -1,0 +1,223 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<sbom xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="tools/simple-sbom/simple-sbom.xsd">
+    <product>
+        <name>PSX/XP Mover</name>
+        <description>plugin injecting PSX position data to X-Plane</description>
+        <website>https://github.com/dneuge/psx-xp-mover</website>
+        <source>https://github.com/dneuge/psx-xp-mover.git</source>
+        <copyright license="MIT" years="2024-2026">
+            <author>DanielNeugebauer</author>
+        </copyright>
+    </product>
+    <dependencies>
+        <dependency id="xplane">
+            <name>X-Plane</name>
+            <source>https://www.x-plane.com/</source>
+            <method>provided</method>
+            <developerRemark>runtime linked to via SDK</developerRemark>
+            <copyright>
+                <author>laminarResearch</author>
+            </copyright>
+        </dependency>
+        <dependency id="xplane-sdk">
+            <name>X-Plane SDK</name>
+            <version>401</version>
+            <source>https://developer.x-plane.com/wp-content/plugins/code-sample-generation/sdk_zip_files/XPSDK401.zip</source>
+            <location>lib/XPSDK</location>
+            <method>separate</method>
+            <copyright license="xpsdk" years="2008">
+                <author>SandyBarbour</author>
+                <author>BenSupnik</author>
+                <combinedAuthors>Sandy Barbour and Ben Supnik</combinedAuthors>
+                <originalRemark>Copyright (c) 2008, Sandy Barbour and Ben Supnik</originalRemark>
+            </copyright>
+            <copyright license="xpsdk" years="2005-2022">
+                <author>laminarResearch</author>
+                <author>SandyBarbour</author>
+                <author>BenSupnik</author>
+                <combinedAuthors>Laminar Research, Sandy Barbour and Ben Supnik</combinedAuthors>
+                <originalRemark>Copyright 2005-2022 Laminar Research, Sandy Barbour and Ben Supnik</originalRemark>
+            </copyright>
+            <dependency>xplane</dependency>
+        </dependency>
+        <dependency id="threads-macos-compat">
+            <name>C11 threads compatibility wrapper for the macOS® operating system</name>
+            <version>216bcaa5777532ecd0a07eac440ae876cfe7f119</version>
+            <website>https://github.com/dneuge/c11-threads-compat-for-macos-operating-system</website>
+            <source>https://github.com/dneuge/c11-threads-compat-for-macos-operating-system.git</source>
+            <location>src/threads_macos_compat.h</location>
+            <location>src/threads_macos_compat.c</location>
+            <method>static</method>
+            <activation>
+                <tag>target-macos</tag>
+            </activation>
+            <copyright license="MIT" years="2024">
+                <author>DanielNeugebauer</author>
+            </copyright>
+        </dependency>
+    </dependencies>
+    <legalEntities>
+        <legalEntity id="appleInc">
+            <name>Apple Inc.</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.apple.com/</contact>
+        </legalEntity>
+        <legalEntity id="microsoftCorp">
+            <name>Microsoft Corporation</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.microsoft.com/de-de/rechtliche-hinweise/impressum</contact>
+        </legalEntity>
+        <legalEntity id="aerosoft">
+            <name>Aerosoft GmbH Luftfahrt-Datentechnik</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.aerosoft.com/</contact>
+        </legalEntity>
+        <legalEntity id="jetbrains">
+            <name>JetBrains s.r.o.</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.jetbrains.com/</contact>
+        </legalEntity>
+        <legalEntity id="kitware">
+            <name>Kitware, Inc.</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.kitware.com</contact>
+        </legalEntity>
+        <legalEntity id="laminarResearch">
+            <name>Laminar Research</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://www.x-plane.com/</contact>
+            <contact type="website" checked="2026-08-30">https://web.archive.org/web/20190304032539/http://www.laminarresearch.com/</contact>
+            <!-- business registration moved from South Carolina to New Hampshire in 2025 -->
+        </legalEntity>
+        <legalEntity id="sfc">
+            <name>Software Freedom Conservancy, Inc.</name>
+            <type>organization</type>
+            <contact type="website" checked="2026-08-30">https://sfconservancy.org</contact>
+        </legalEntity>
+        <legalEntity id="AustinMeyer">
+            <name>Austin Meyer</name>
+            <type>person</type>
+            <association>
+                <type>owns</type>
+                <id>laminarResearch</id>
+                <source checked="2025-09-29">https://quickstart.sos.nh.gov/online/BusinessInquire/BusinessInformation?businessID=KaH66qA%2B5Z4%3D</source>
+            </association>
+        </legalEntity>
+        <legalEntity id="BenSupnik">
+            <name>Ben Supnik</name>
+            <type>person</type>
+        </legalEntity>
+        <legalEntity id="DanielNeugebauer">
+            <name>Daniel Neugebauer</name>
+            <type>person</type>
+            <contact type="website" checked="2026-08-30">http://www.energiequant.de/</contact>
+            <contact type="website" checked="2026-08-30">https://github.com/dneuge</contact>
+            <contact type="website" checked="2026-08-30">https://codeberg.org/dneuge</contact>
+        </legalEntity>
+        <legalEntity id="HardyHeinlin">
+            <name>Hardy Heinlin</name>
+            <type>person</type>
+            <contact type="website" checked="2026-08-30">https://aerowinx.com/</contact>
+        </legalEntity>
+        <legalEntity id="LinusTorvalds">
+            <name>Linus Torvalds</name>
+            <type>person</type>
+        </legalEntity>
+        <legalEntity id="SandyBarbour">
+            <name>Sandy Barbour</name>
+            <type>person</type>
+        </legalEntity>
+    </legalEntities>
+    <licenses>
+        <license id="MIT" name="MIT License" shortName="MIT">
+            <standard spdx="MIT"/>
+        </license>
+        <license id="xpsdk" name="X-Plane SDK License" shortName="X-Plane SDK">
+            <!-- TODO: check if there is a matching standard license -->
+            <copy file="lib/XPSDK/license.txt" />
+        </license>
+    </licenses>
+    <trademarks>
+        <trademark>
+            <!-- reg should be used for marking: https://aerowinx.com/board/index.php?msg=84987
+                 (also seen on the website logo) -->
+            <name mark="reg">Aerowinx</name>
+            <owner>HardyHeinlin</owner>
+            <display>Aerowinx</display>
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/GB500000914648372</source>
+            <!-- former trademark "Aerowinx Precision Simulator" has been cancelled in 2009, current trademark only
+                 covers "Aerowinx"; old: https://www.tmdn.org/tmview/#/tmview/detail/DE500000399031596 -->
+        </trademark>
+        <trademark>
+            <!-- Apple expressly instructs not to mark trademark names if there is a possibility it could be distributed
+                 outside the US; 3 April 2026, section 2a of "Proper Trademark Notice and Attribution":
+                 "Do not use trademark symbols on products, product documentation, or other product communications that
+                 will be distributed outside the United States."
+             -->
+            <!-- note that Apple also prohibits use of their trademarks standalone, they must only be used in association
+                 with neutral other words, e.g. "the macOS operating system" or "the Xcode development suite" -->
+            <name mark="none">Apple</name>
+            <name mark="none">Mac</name>
+            <name mark="none">macOS</name>
+            <name mark="none">Xcode</name>
+            <owner>appleInc</owner>
+            <display>Mac, macOS and XCode are trademarks of Apple Inc., registered in the U.S. and other countries and regions.</display>
+            <source checked="2026-08-30">https://www.apple.com/legal/intellectual-property/guidelinesfor3rdparties.html</source>
+            <source checked="2026-08-30">https://www.apple.com/legal/intellectual-property/trademark/appletmlist.html</source>
+        </trademark>
+        <trademark>
+            <!-- CMake and Kitware nowhere seem to attach a trademark symbol but they also do not appear to have
+                 published any trademark guidelines, so reg is used once out of caution -->
+            <name mark="reg" markFirstUseOnly="true">CMake</name>
+            <owner>kitware</owner>
+            <display>CMake is a registered trademark of Kitware, Inc.</display>
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/US500000085215597</source>
+        </trademark>
+        <trademark>
+            <name mark="reg">JetBrains</name>
+            <name mark="reg">CLion</name>
+            <owner>jetbrains</owner>
+            <display>JetBrains and CLion are trademarks of JetBrains s.r.o.</display>
+            <source checked="2026-08-30">https://www.jetbrains.com/company/brand/</source>
+            <!-- CLion -->
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/GB500000801265550</source>
+            <!-- JetBrains -->
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/WO500000001175150</source>
+        </trademark>
+        <trademark>
+            <name mark="reg" markFirstUseOnly="true">Git</name>
+            <owner>sfc</owner>
+            <display>Git and the Git logo are either registered trademarks or trademarks of Software Freedom Conservancy, Inc., corporate home of the Git Project, in the United States and/or other countries.</display>
+            <source checked="2026-08-30">https://git-scm.com/about/trademark</source>
+        </trademark>
+        <trademark>
+            <name mark="reg" markFirstUseOnly="true">Linux</name>
+            <owner>LinusTorvalds</owner>
+            <display>Linux® is the registered trademark of Linus Torvalds in the U.S. and other countries.</display>
+            <source checked="2026-08-30">https://www.linuxfoundation.org/legal/the-linux-mark</source>
+        </trademark>
+        <trademark>
+            <name mark="reg">Microsoft</name>
+            <name mark="reg">Visual Studio</name>
+            <name mark="reg">Windows</name>
+            <owner>microsoftCorp</owner>
+            <!-- Microsoft comes first, then an alphabetical list of other trademarks, see guidelines -->
+            <display>Microsoft, Visual Studio and Windows are trademarks of the Microsoft group of companies.</display>
+            <source checked="2026-08-30">https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks</source>
+            <!-- Visual Studio -->
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/DE500000305651706</source>
+            <!-- Windows -->
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/DE500000002913732</source>
+        </trademark>
+        <trademark>
+            <name mark="none">X-Plane</name>
+            <owner>AustinMeyer</owner>
+            <owner expiration="2025-10-06">aerosoft</owner>
+            <display>X-Plane is a registered trademark of Austin Meyer.</display>
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/US500000076484507</source>
+            <!-- the following sources confirm Aerosoft's trademarks have expired without renewal -->
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/EM500000014648372</source>
+            <source checked="2026-08-30">https://www.tmdn.org/tmview/#/tmview/detail/GB500000914648372</source>
+        </trademark>
+    </trademarks>
+</sbom>
