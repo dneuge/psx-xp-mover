@@ -52,6 +52,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.commit_ref }}
+          # full history is needed to identify tags after checkout (release build identification)
+          fetch-depth: 0
       - name: restore cache
         id: cache-restore
         if: "${{ github.event.inputs.restore_cache == 'true' }}"
