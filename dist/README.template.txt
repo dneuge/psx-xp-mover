@@ -13,3 +13,8 @@ A list of all datarefs matching this version is available at:
 │ By using this software you accept DISCLAIMER.txt and LICENSES.txt. │
 │                Please read those files before use.                 │
 ╰────────────────────────────────────────────────────────────────────╯
+
+
+Git and the Git logo are either registered trademarks or trademarks of
+Software Freedom Conservancy, Inc., corporate home of the Git Project,
+in the United States and/or other countries.

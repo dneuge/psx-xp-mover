@@ -1,0 +1,10 @@
+Git and the Git logo are either registered trademarks or trademarks of
+Software Freedom Conservancy, Inc., corporate home of the Git Project,
+in the United States and/or other countries.
+
+Mac and macOS are trademarks of Apple Inc., registered in the U.S. and other
+countries and regions.
+
+Microsoft and Windows are trademarks of the Microsoft group of companies.
+
+X-Plane is a registered trademark of Austin Meyer.

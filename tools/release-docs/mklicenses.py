@@ -10,6 +10,9 @@ UTF_8_FILE_ENCODING = 'utf-8'
 root_dir = tool_dir + os.sep + os.pardir
 release_dir = root_dir + os.sep + 'release'
 
+dist_dir = root_dir + os.sep + 'dist'
+license_trademarks_path = dist_dir + os.sep + 'LICENSES.trademarks.txt'
+
 licenses_dir = root_dir + os.sep + 'licenses'
 spdx_licenses_dir = licenses_dir + os.sep + 'spdx'
 
@@ -252,33 +255,14 @@ for license_id in license_ids:
     license_out.append('')
     license_out += text.rstrip().split(r'\R')
 
+# add static trademarks as used within the license file only
+license_out.append('')
+license_out.append('')
+license_out.append(format_captioned_divider('Trademarks'))
+license_out.append('')
+license_out += load_text_file(license_trademarks_path).split(r'\R')
+
 print(f'Writing {license_out_path}')
 with open(license_out_path, 'w', encoding=UTF_8_FILE_ENCODING) as fh:
     fh.write('\n'.join(license_out))
 print('... done')
-
-"""
-output_index = 0
-trademarks_out_links: list[str] = []
-for trademark in sorted(sbom.trademarks, key=lambda x: x.display.strip().lower()):
-    output_index_string = format_output_index(output_index)
-
-    trademarks_out.append('static const char _xprc_trademark_acknowledgment_%s[] =' % output_index_string)
-    trademarks_out += format_c_multiline_string(trademark.display, rstrip=True)
-    trademarks_out.append(';')
-    trademarks_out.append('')
-
-    trademarks_out_links.append('    _xprc_trademark_acknowledgment_%s,' % output_index_string)
-
-    output_index += 1
-
-trademarks_out.append('static const char *_xprc_trademarks_acknowledgments[] = {')
-trademarks_out += trademarks_out_links
-trademarks_out.append('    NULL,')
-trademarks_out.append('};')
-
-print(f'Writing {trademarks_out_path}')
-with open(trademarks_out_path, 'w', encoding=ASCII_FILE_ENCODING) as fh:
-    fh.write('\n'.join(trademarks_out))
-print('... done')
-"""
