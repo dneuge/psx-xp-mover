@@ -31,6 +31,8 @@ disclaimer_markdown="$(head -n${disclaimer_content_end_lno} "${readme_path}" | t
 # replace Markdown links by just link caption
 disclaimer_text="$(sed -e's#\[\([^]]\+\)\]([^)]\+)#\1#g' <<<"$disclaimer_markdown")"
 
+mkdir -p "${out_dir}" || die "failed to create output directory: ${out_dir}"
+
 (
   echo "Specific Disclaimer for PSX/XP Mover"
   echo "------------------------------------"

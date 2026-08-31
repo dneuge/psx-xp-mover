@@ -15,6 +15,8 @@ function die() {
 cd "${root_dir}"
 source _build_target.sh || die "Failed to include build target script"
 
+mkdir -p "${release_dir}" || die "failed to create output directory: ${release_dir}"
+
 version_path="${release_dir}/VERSION.txt"
 
 cat >"${version_path}" <<EOF
