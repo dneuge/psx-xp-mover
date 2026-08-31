@@ -40,5 +40,6 @@ mkdir -p "${out_dir}" || die "failed to create output directory: ${out_dir}"
   cat <<<"$disclaimer_text"
   echo
   echo
-  echo "Refer to LICENSES.txt for complete license information incl. associated disclaimers."
+  echo "Refer to LICENSES.txt for complete license information incl. associated"
+  echo "disclaimers."
 ) >"${out_path}"

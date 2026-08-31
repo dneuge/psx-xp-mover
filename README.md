@@ -229,21 +229,26 @@ The upcoming virtual cockpit bridge uses that feature to steer PSX while a push-
 
 ## Disclaimer
 
-In addition to the disclaimer already present in the [MIT license](LICENSE.md) we would like to issue a few specific
-warnings:
+In addition to the disclaimer already present in the [MIT license](LICENSE.md), the
+[binary distribution license](licenses/xpmover-binary-distribution.txt) and the individual licenses of each
+dependency we would like to issue a few specific warnings:
 
-Aircraft position and orientation are subject to sudden and/or discontinuous changes. You are highly discouraged
-from using its output (i.e. any state injected to X-Plane) to drive motion platforms or other hardware interfaces as
+Aircraft position and orientation are subject to sudden and/or discontinuous
+changes. You are highly discouraged from using its output (i.e. any state
+injected to X-Plane) to drive motion platforms or other hardware interfaces as
 that could greatly increase risks of injury or damage.
 
-Even when using PSX in a certified setup, this plugin should not be used for real-world training. The project is being
-developed for recreation and thus may not qualify for professional use and could void your certification.
-In addition to the cockpit not being handled by this plugin, inaccurate representation should be expected at all times,
-including drift by interpolation or terrain blending, affecting critical flight phases in particular (takeoff,
-departure, approach, landing) as well as inaccurate depiction of ground operations (e.g. wrong acceleration and
-object clearance).
+Even when using PSX in a certified setup, this plugin should not be used for
+real-world training. The project is being developed for recreation and thus
+may not qualify for professional use and could void your certification.
+In addition to the cockpit not being handled by this plugin, inaccurate
+representation should be expected at all times, including drift by
+interpolation or terrain blending, affecting critical flight phases in
+particular (takeoff, departure, approach, landing) as well as inaccurate
+depiction of ground operations (e.g. wrong acceleration and object clearance).
 
-As the license already states, no warranty or liability will be given; use at your own risk.
+As the licenses already state, no warranty or liability will be given; use at
+your own risk.
 
 ## License
 
