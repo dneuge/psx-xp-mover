@@ -211,6 +211,26 @@ if [[ "${CMAKE_TOOLCHAIN_FILE}" != "" ]]; then
 	CMAKE_TOOLCHAIN_FILE=$(realpath "${CMAKE_TOOLCHAIN_FILE}")
 fi
 
+# build information
+if [[ "${XPMOVER_BUILD_REF:-}" != "" ]]; then
+  echo "!! Build version reference has been overridden to: ${XPMOVER_BUILD_REF}"
+elif [[ ! -d .git ]]; then
+  echo "!! Building without git repository, build version reference will be missing"
+else
+  XPMOVER_BUILD_REF="$(git rev-parse HEAD)"
+
+  tag="$(git describe --tags --exact-match 2>/dev/null || echo -n)"
+  if [[ "$tag" != "" ]]; then
+    XPMOVER_BUILD_REF="${tag}@${XPMOVER_BUILD_REF}"
+  fi
+
+  if [[ "$(git status --porcelain)" != "" ]]; then
+    XPMOVER_BUILD_REF="${XPMOVER_BUILD_REF}(modified)"
+  fi
+
+  export XPMOVER_BUILD_REF
+fi
+
 echo "Build target: X-Plane ${XPLANE_TARGET} on ${BUILD_TARGET}"
 if [[ "${CMAKE_TOOLCHAIN_FILE}" != "" ]]; then
 	echo "  applying CMake toolchain: ${CMAKE_TOOLCHAIN_FILE}"

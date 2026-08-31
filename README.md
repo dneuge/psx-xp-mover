@@ -252,6 +252,10 @@ All sources and original files of this project are provided under [MIT license](
 project) are subject to their own respective licenses which can affect distribution, particularly in binary/packaged
 form.
 
+Binary builds are subject to an [additional license](licenses/xpmover-binary-distribution.txt). Release builds include
+a `LICENSES.txt` file combining all license information in a single file. Users accept all license terms and disclaimers
+by downloading and installing the plugin to their flight simulator.
+
 ### Note on the use of/for AI
 
 Usage for AI training is subject to individual source licenses, there is no exception. This generally means that proper

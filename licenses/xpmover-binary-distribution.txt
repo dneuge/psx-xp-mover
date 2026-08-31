@@ -1,0 +1,135 @@
+         PSX/XP MOVER BINARY DISTRIBUTION LICENSE AND DISCLAIMER
+                         License Version 1.0
+
+PSX/XP Mover is being developed and published as Open Source under the
+MIT license but couldn't have been done without the help of other
+software dependencies, which are subject to several additional licenses.
+Source code needs to be compiled to a binary in order to be loaded into
+the simulator as a plugin.
+
+This "binary distribution license" aims to provide an initial high-level
+explanation and collective disclaimer and should mainly be seen as an
+additional preamble, applying to the binary end product but not restricting
+the availability or permissions associated with its MIT-licensed source code
+or the dependencies it has been linked with. This license does not substitute
+or restrict any of the original licenses of the plugin or its dependencies.
+Users should carefully read and must accept all applicable licenses and
+disclaimers.
+
+If you do not agree to or cannot fulfill any of the terms set by either
+license or disclaimer, then you are required to immediately discontinue use
+of PSX/XP Mover and may be obliged to delete all copies you received or
+created.
+
+
+1. Disclaimer
+
+In addition to each license detailing how recipients are being granted
+permissions to use the software, they also generally contain warranty and
+liability disclaimers. While all original disclaimers remain in full effect,
+the following disclaimer, based on the plugin source's primary MIT license,
+and the provided examples shall act as a summary of what (not) to expect:
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Put in simple words:
+
+- PSX/XP Mover likely has bugs and you cannot legally demand to have them
+  corrected or receive compensation for anything (also remember that,
+  at least if obtained from official project locations, this plugin is
+  provided to you free of charge)
+
+- If you choose to connect machinery such as, for example, a force feedback
+  yoke, motorized thrust lever or even a moving platform to your sim and
+  influence it (directly or indirectly) through PSX/XP Mover, then you or
+  others may actually get physically injured. No matter if that's due to a
+  bug or intended operation of the plugin, it's entirely on you (the user),
+  not "us" (the developers and authors) to deal with the consequences/damage.
+  "We" will also not compensate anyone for damage to property such as a
+  broken hardware part or a burnt-down house.
+
+- in short: use at your own risk
+
+This is just a license-side disclaimer; for furher information read
+DISCLAIMER.txt.
+
+
+2. Compliance
+
+It may be possible that you or your country are subject to additional
+regulations such as US export restrictions incl. special terms of use
+concerning the operating system you are using this plugin on. You, the user,
+acknowledge that such restrictions are not always feasible to be checked for
+you when it comes to distribution of free and Open Source software such as
+this poject. Therefore, you accept that it is your own responsibility to remain
+in compliance with all additional terms and conditions concerning for example,
+but not limited to, your local jurisdiction, the place of import/use of the
+plugin or the computer environment you install it to, incl. proper licensing of
+the operating system and its components.
+
+
+3. Linking, Combined Work
+
+When source code is being compiled to binaries, all dependencies are being
+linked to or into the resulting file(s). During that process, individual
+dependencies may become inseparable from the end product (static linking).
+
+In general, the inclusion of dependencies may constitute a "combined work".
+
+These terms may be referred to by some dependencies' licenses.
+
+
+4. Connected Applications
+
+PSX/XP Mover offers registers DataRefs (globally shared variabled) in
+X-Plane which can be interfaced with by other plugins or applications.
+This distribution license and additional disclaimer explicitly do not
+cover or restrict those applications.
+
+Each interfacing application is free to choose its own license(s) and
+disclaimer(s) as long as it does not interfere with any terms and conditions
+set by the individual licenses of PSX/XP Mover and its dependencies.
+
+
+5. Redistribution & Forks
+
+In case you decide to bundle PSX/XP Mover with another product, please include
+the complete official distribution package or its unaltered contents. Please do
+not replace existing installations without confirmation.
+When building an installer, the recommended way would be to offer the plugin as
+an option, possibly checking for an existing installation and disabling that
+option by default, if found.
+
+When forking or distributing your own builds of PSX/XP Mover, please check if
+and how this "binary distribution license" still applies to you or your work
+and make the necessary changes. Also make sure to update copyright information,
+while retaining all original notes. In addition to conditions made by original
+licenses, it should be noted that some forms of distribution as well as
+anything published e.g. by commercial entities may in some jurisdictions not
+be entitled to disclaim warranty & liability. Please check the project's
+website(s) and source repositories for more information and seek legal advice
+(not provided by the project), if necessary.
+
+Note that even bundling the original package may in some cases require
+warranty and liability to be provided by the distributor. It may be
+preferable to just refer users to the original website(s) to obtain the plugin
+as a separate copy.
+
+If you make modifications to this "binary distribution license", please give
+it a new name to clearly distinguish it from the original and avoid
+confusion.
+
+
+6. Severability
+
+In case any condition of this license may be invalid or conflict with itself
+or an original license of PSX/XP Mover or its various dependencies, the part that
+is in question shall be substituted while following the original intent as
+closely as possible. Original licenses always take precedence, if in
+conflict.
